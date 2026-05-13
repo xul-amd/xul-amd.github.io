@@ -1,0 +1,4 @@
+window.SUPABASE_URL = "https://pmgfmymtavhjfynoyupv.supabase.co";
+window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtZ2ZteW10YXZoamZ5bm95dXB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0ODUyNDAsImV4cCI6MjA5NDA2MTI0MH0.It7fB4luoNyg2UfE9N86ICxjGFxtmVa5WLIBZriW7hQ";
+localStorage.removeItem('ats-leaderboard');
+localStorage.removeItem('ats-best');

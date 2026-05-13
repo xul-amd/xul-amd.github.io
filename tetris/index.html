@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ATSsemble — Tetris Inspired</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #0e0f12; display: grid; place-items: center; }
+    #game-container { box-shadow: 0 10px 30px rgba(0,0,0,.35); border-radius: 12px; overflow: hidden; }
+    .instructions {
+      position: static;
+      margin-top: 18px;
+      width: 100%;
+      max-width: 480px;
+      color: #ccc;
+      font-size: 13px;
+      font-family: sans-serif;
+      opacity: 0.8;
+      text-align: left;
+      z-index: 1;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div class="instructions">
+    <div style="font-size:15px; color:#fff; font-weight:bold; margin-bottom:2px;">How to Play</div>
+    <div>Goal: Make 
+      <span style="display:inline-block;width:15px;height:15px;background:#4ea1ff;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 1px 0 2px;">A</span>
+      <span style="display:inline-block;width:15px;height:15px;background:#ffae4e;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 1px;">T</span>
+      <span style="display:inline-block;width:15px;height:15px;background:#5bd08a;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 1px;">S</span>
+         <!-- in a straight line (→, ↓, ↘, ↙, ↗, ↖) to clear. -->
+         in a straight line (→, ↓, ↘, ↗) to clear. 
+    </div>
+    <div>
+      Specials:
+      <span style="display:inline-block;width:15px;height:15px;background:#9b8cff;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 2px;">✱</span> wildcard = any letter
+      • <span style="display:inline-block;width:15px;height:15px;background:#ff5d5d;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 2px;">B</span> bomb clears 3×3
+      • <span style="display:inline-block;width:15px;height:15px;background:#ffe36e;color:#0b0f16;font-weight:bold;border-radius:4px;text-align:center;line-height:15px;margin:0 2px;">✦</span> mega bomb clears a whole row and column.
+    </div>
+    <div>Hazards: Junk/poison letters block your setups. Garbage rows rise every few locks.</div>
+    <div>Controls: Click to start • ←/→ move • ↓ soft drop • R restart</div>
+    <div style="font-size:15px; color:#ffe36e; font-weight:bold; margin:8px 0 2px 0;">Scoring</div>
+    <div style="font-size:13px; color:#ffe36e;">
+      <b>+100</b> per A–T–S triple<br>
+      <b>+25</b> per diagonal triple<br>
+      <b>+50</b> per triple for each extra chain step<br>
+      <b>+20</b> per block cleared by <b>B</b> bomb<br>
+      <b>+150</b> for <b>✦</b> mega bomb (row/col clear)
+    </div>
+  </div>
+<script>
+(() => {
+  // ----- Config -----
+  // --- Online Leaderboard (Supabase) ---
+  // 1) Create a Supabase project (free), table: scores(name text, score int, created_at timestamptz default now())
+  // 2) Fill in your project URL and anon key below. Leave as '' to disable online posting.
+  window.SUPABASE_URL = window.SUPABASE_URL || "";
+  window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "";
+  let supa = null;
+  if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
+    supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  }
+
+  async function postOnlineScore(name, score, lockCount, elapsedSeconds){
+    if(!supa) return { ok:false, reason:'no-supabase' };
+    try{
+      const { data, error } = await supa.rpc('submit_score', {
+        p_name: name, p_score: score,
+        p_lock_count: lockCount, p_elapsed_seconds: elapsedSeconds
+      });
+      if (error) return { ok:false, reason:error.message };
+      return data || { ok:true };
+    } catch(e){ return { ok:false, reason:String(e) }; }
+  }
+  function periodSince(period){
+    const now = new Date();
+    if (period === 'today') {
+      const d = new Date(); d.setHours(0,0,0,0); return d.toISOString();
+    } else if (period === 'week') {
+      const d = new Date(now.getTime() - 7*24*60*60*1000); return d.toISOString();
+    }
+    return null; // all-time
+  }
+  async function fetchTopOnline(limit=10, period='all'){
+    if(!supa) return { ok:false, rows:[] };
+    try{
+      let query = supa.from('scores').select('name,score,created_at');
+      const since = periodSince(period);
+      if (since) query = query.gte('created_at', since);
+      // Fetch more records initially to account for deduplication
+      const { data, error } = await query.order('score',{ascending:false}).limit(limit * 3);
+      if (error) return { ok:false, rows:[] };
+      // Deduplicate by name and then limit to requested amount
+      const deduplicated = deduplicateScoresByName(data||[]);
+      return { ok:true, rows: deduplicated.slice(0, limit) };
+    } catch(e){ return { ok:false, rows:[] }; }
+  }
+
+  // --- Deduplication helper ---
+  function deduplicateScoresByName(rows){
+    if(!rows || rows.length === 0) return rows;
+    const nameMap = new Map();
+    // Keep the highest score for each name
+    rows.forEach(row => {
+      const name = row.name || 'anon';
+      const existing = nameMap.get(name);
+      if (!existing || row.score > existing.score) {
+        nameMap.set(name, row);
+      }
+    });
+    // Convert back to array and sort by score descending
+    return Array.from(nameMap.values()).sort((a, b) => b.score - a.score);
+  }
+
+
+  // --- Side Leaderboard (desktop only) ---
+  let sideLBEl=null, sideLBTimer=null, sideLBPeriod='all';
+  function isDesktop(){ try { return window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 1100; } catch(_) { return false; } }
+  function sideLBPosition(){ if(!sideLBEl) return; const rect=document.getElementById('game-container').getBoundingClientRect(); sideLBEl.style.left=(rect.right+16)+'px'; sideLBEl.style.top=rect.top+'px'; }
+  async function fetchUserBestOnline(name, period='all'){
+    if(!supa || !name) return null;
+    try{
+      let q = supa.from('scores').select('score').eq('name', name).order('score',{ascending:false}).limit(1);
+      const since = periodSince(period);
+      if (since) q = q.gte('created_at', since);
+      const { data, error } = await q;
+      if(error || !data || !data.length) return null;
+      return data[0].score;
+    }catch{ return null; }
+  }
+  async function fetchRankOnline(score, period='all'){
+    if(!supa || typeof score !== 'number') return null;
+    try{
+      let q = supa.from('scores').select('id', { count: 'exact', head: true }).gt('score', score);
+      const since = periodSince(period);
+      if (since) q = q.gte('created_at', since);
+      const { count, error } = await q;
+      if(error) return null;
+      return (count||0)+1;
+    }catch{ return null; }
+  }
+  function sideLBRender(rows, opts={}){
+    if(!sideLBEl) return;
+    const tabs = sideLBEl.querySelectorAll('.tab');
+    tabs.forEach(t=> t.style.opacity = (t.dataset.period===sideLBPeriod?'1':'0.6'));
+    const list=sideLBEl.querySelector('.list');
+    const myName = (localStorage.getItem('ats-name')||'').trim();
+    const myBestAll = Number(localStorage.getItem('ats-best')||0);
+
+    if(!rows||rows.length===0){
+      let extra = myBestAll>0 ? `<div style="margin-top:6px;opacity:.7;font-size:12px">Your best: <b>${myBestAll}</b>${opts.myRank?` • Rank #${opts.myRank}`:''}</div>` : '';
+      list.innerHTML='<div style="opacity:.7">No scores yet — be the first!</div>'+extra; return;
+    }
+
+    // Find user's row inside Top 10 (if any)
+    let hasMine = false;
+    const html = rows.slice(0,10).map((r,i)=>{
+      const mine = myName && r.name === myName;
+      if(mine) hasMine = true;
+      const rowStyle = mine ? 'background:#1b2230;border-radius:6px;padding:2px 6px;' : '';
+      const name = mine ? `${r.name||'anon'} <span style="opacity:.8">(you)</span>` : (r.name||'anon');
+      return `<div style="${rowStyle}display:flex;justify-content:space-between;gap:12px;">
+        <span>${String(i+1).padStart(2,'0')}. ${name}</span><b>${r.score}</b>
+      </div>`;
+    }).join('');
+
+    let footer = '';
+    if(!hasMine && (opts.myBestForPeriod||myBestAll)>0){
+      const best = opts.myBestForPeriod || myBestAll;
+      const rankText = (opts.myRank?` • Rank #${opts.myRank}`:'');
+      footer = `<div style="margin-top:8px;opacity:.8;font-size:12px;">Your best: <b>${best}</b>${myName?` — ${myName}`:''}${rankText}</div>`;
+    }
+
+    list.innerHTML = html + footer;
+  }
+  function sideLBRefresh(){
+    if(!sideLBEl) return;
+    const myName = (localStorage.getItem('ats-name')||'').trim();
+    fetchTopOnline(10, sideLBPeriod).then(async res=>{
+      const rows=(res.ok && res.rows.length)?res.rows:[];
+      let myBestForPeriod = null; let myRank = null;
+      if (myName) {
+        const onlineBest = await fetchUserBestOnline(myName, sideLBPeriod);
+        if (onlineBest!=null) {
+          myBestForPeriod = onlineBest;
+          myRank = await fetchRankOnline(onlineBest, sideLBPeriod);
+        }
+      }
+      sideLBRender(rows, { myBestForPeriod, myRank });
+    }).catch(()=> {
+      sideLBRender([], {});
+    });
+  }
+  function sideLBShow(){
+    if(!isDesktop()) return; if(sideLBEl) return;
+    sideLBEl=document.createElement('div'); sideLBEl.className='side-lb';
+    Object.assign(sideLBEl.style,{ position:'fixed', width:'240px', background:'#0f1115', border:'1px solid #333842', borderRadius:'10px', padding:'12px', color:'#e7e9ee', fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial', boxShadow:'0 10px 30px rgba(0,0,0,.45)', zIndex: 9998 });
+    sideLBEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-weight:700;">Leaderboard</div>
+        <div class="tabs" style="display:flex;gap:8px;font-size:12px;">
+          <span class="tab" data-period="today" style="cursor:pointer;opacity:.6">Today</span>
+          <span class="tab" data-period="week" style="cursor:pointer;opacity:.6">Week</span>
+          <span class="tab" data-period="all" style="cursor:pointer;opacity:1">All-time</span>
+        </div>
+      </div>
+      <div class="list" style="font-size:14px; line-height:1.6">Loading…</div>`;
+    sideLBEl.addEventListener('click', (e)=>{
+      const t = e.target; if(!(t && t.classList && t.classList.contains('tab'))) return;
+      sideLBPeriod = t.dataset.period || 'all';
+      sideLBRefresh();
+    });
+    document.body.appendChild(sideLBEl);
+    sideLBPosition(); sideLBRefresh();
+    sideLBTimer=setInterval(sideLBRefresh, 30000);
+    window.addEventListener('resize', sideLBPosition); window.addEventListener('scroll', sideLBPosition);
+  }
+  function sideLBHide(){ if(!sideLBEl) return; try{ document.body.removeChild(sideLBEl);}catch{} sideLBEl=null; if(sideLBTimer){ clearInterval(sideLBTimer); sideLBTimer=null; } window.removeEventListener('resize', sideLBPosition); window.removeEventListener('scroll', sideLBPosition); }
+  const CELL = 32, COLS = 10, ROWS = 15, MARGIN = 30, UIH = 90; // smaller grid lengthwise
+  const GRID_W = COLS * CELL, GRID_H = ROWS * CELL;
+  const VIEW_W = GRID_W + MARGIN*2, VIEW_H = GRID_H + UIH + MARGIN*2;
+
+  const TILE_COLORS = {
+    A: 0x4ea1ff,
+    T: 0xffae4e,
+    S: 0x5bd08a,
+    '*': 0x9b8cff,  // wildcard
+    B: 0xff5d5d,    // bomb (3x3)
+    M: 0xffe36e,    // mega bomb (row/col)
+    other: 0x8a9ab5
+  };
+  const COLORS = { ghost:0x3a3f4a, bg:0x14161b, grid:0x23272f, panel:0x0f1115 };
+
+  const gx = (x)=>MARGIN + x*CELL;
+  const gy = (y)=>MARGIN + UIH + y*CELL;
+  const inBounds = (x,y)=> x>=0 && x<COLS && y>=0 && y<ROWS;
+
+  // Weighted random for letters (sum = 100)
+  const BAG = [
+    ['A',20], ['T',20], ['S',20],
+    ['*',3],  // rarer wildcard
+    ['B',3],  // bomb 3x3
+    ['M',2],  // mega bomb (row/col)
+    // junk / blockers (including some "poison" letters)
+    ['D',4], ['E',4], ['I',4], ['O',4], ['N',4], ['R',3], ['X',3], ['Z',3], ['Y',3]
+  ];
+  function randLetter(){
+    let r = Math.random()*100; for(const [ch,w] of BAG){ if((r-=w) < 0) return ch; } return 'A';
+  }
+
+  class GameScene extends Phaser.Scene {
+    constructor(){ super('Game'); this.resetState(); }
+    resetState(){
+      this.grid = Array.from({length:ROWS},()=>Array(COLS).fill(null));
+      this.active = null;
+      this.dropTimer = 0;
+      this.dropInterval = 700;
+      this.nextGarbageInterval = undefined;
+      this.started = false;
+      this.paused = true;
+      this.gameOver = false;
+      this.score = 0;
+      this.best = Number(localStorage.getItem('ats-best')||0);
+      this.lockCount = 0;      // for garbage timing
+      this.nextQueue = [];     // preview queue
+      // Remove any lingering Game Over text
+      if (this.gameOverText) { this.gameOverText.destroy(); this.gameOverText = null; }
+    }
+
+    create(){
+      // Panels
+      this.add.rectangle(0,0,VIEW_W,VIEW_H,COLORS.panel).setOrigin(0).setDepth(0);
+      this.add.rectangle(MARGIN-2, MARGIN-2, GRID_W+4, UIH+4, COLORS.bg).setOrigin(0).setDepth(1);
+      this.add.rectangle(MARGIN-2, MARGIN+UIH-2, GRID_W+4, GRID_H+4, COLORS.bg).setOrigin(0).setDepth(1);
+
+      // Gridlines
+      const gl = this.add.graphics({ lineStyle:{ width:1, color:COLORS.grid, alpha:0.7 }}).setDepth(2);
+      for(let x=0;x<=COLS;x++) gl.lineBetween(gx(x), gy(0), gx(x), gy(ROWS));
+      for(let y=0;y<=ROWS;y++) gl.lineBetween(gx(0), gy(y), gx(COLS), gy(y));
+
+      // UI texts
+      this.title = this.add.text(MARGIN+8, MARGIN+8, 'ATSsemble', {fontSize:22, color:'#e7e9ee'}).setDepth(3);
+      this.scoreText = this.add.text(MARGIN+8, MARGIN+46, 'Score: 0', {fontSize:16, color:'#e7e9ee'}).setDepth(3);
+      this.bestText  = this.add.text(MARGIN+140, MARGIN+46, `Best: ${this.best}`, {fontSize:16, color:'#e7e9ee'}).setDepth(3);
+
+      // Preview queue UI
+      this.add.text(MARGIN+GRID_W - (CELL*3) - 56, MARGIN+8, 'Next:', {fontSize:14, color:'#cbd5e1'}).setDepth(3);
+      this.previewGroup = this.add.container(MARGIN+GRID_W - (CELL*3), MARGIN+6).setDepth(3);
+  // Instructions now in HTML footer, not in-canvas
+
+      // Controls
+      this.keyL = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+      this.lbOpen = false;
+      // this.keyL.on('down', ()=> this.toggleLeaderboard());
+      this.cursors = this.input.keyboard.createCursorKeys();
+      this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+      this.keyRListener = ()=> {
+  // Prevent restart before the game has started or while on Game Over screen
+  if (!this.started || this.gameOver) return;
+  this.restart();
+};
+      this.keyR.on('down', this.keyRListener);
+
+      // Ghost preview and layer order
+      this.ghost = this.add.graphics().setDepth(4);
+
+      // Start overlay (CLICK ONLY)
+      this.startOverlay = this.add.rectangle(0,0,VIEW_W,VIEW_H,0x000000,0.45).setOrigin(0).setDepth(10);
+      this.startText = this.add.text(VIEW_W/2, VIEW_H/2, 'Click to Start', {fontSize:22, color:'#ffffff'}).setOrigin(0.5).setDepth(11);
+      this.input.once('pointerdown', ()=>{
+        this.started = true; this.paused = false; this.gameStartTime = Date.now();
+        this.startOverlay.destroy(); this.startText.destroy();
+        this.refillQueue(3); this.drawPreview();
+        this.spawn();
+      });
+
+      // Small hint for leaderboard
+      // this.leadHint = this.add.text(MARGIN+VIEW_W-200, MARGIN+UIH-24, 'Press L: Leaderboard', {fontSize:12, color:'#cbd5e1'}).setDepth(3);
+      if (typeof sideLBShow==='function') sideLBShow();
+    }
+
+    // ----- Piece helpers -----
+    makeBlock(letter,x,y){
+      const cont = this.add.container(gx(x)+CELL/2, gy(y)+CELL/2).setDepth(5);
+      const color = TILE_COLORS[letter] ?? TILE_COLORS.other;
+      const rect = this.add.rectangle(0,0,CELL-4,CELL-4,color).setOrigin(0.5);
+      let glyph = letter;
+      if(letter==='*') glyph = '✱';
+      if(letter==='M') glyph = '✦';
+      const txt  = this.add.text(0,0,glyph,{fontSize:18,color:'#0b0f16'}).setOrigin(0.5);
+      cont.add([rect,txt]);
+      cont.setData({letter});
+      return cont;
+    }
+
+    createLocked(letter,x,y){
+      const cont = this.makeBlock(letter,x,y);
+      this.grid[y][x] = { letter, obj: cont };
+      return cont;
+    }
+
+    canMove(x,y){ return inBounds(x,y) && this.grid[y][x]===null; }
+
+    setActivePos(x,y){ if(!this.active) return; this.active.x=x; this.active.y=y; this.active.cont.setPosition(gx(x)+CELL/2, gy(y)+CELL/2); this.updateGhost(); }
+
+    spawn(){
+      this.refillQueue(3);
+      const letter = this.nextQueue.shift();
+      this.refillQueue(3);
+      this.drawPreview();
+      const x = Math.floor(COLS/2), y = 0;
+      if(!this.canMove(x,y)) return this.endGame();
+      const cont = this.makeBlock(letter,x,y);
+      this.active = { x,y,letter,cont };
+      this.updateGhost();
+    }
+
+    postLockContinue(){
+      if(this.gameOver) return;
+      this.lockCount++;
+      // Find the highest filled row
+      let highestRow = 0;
+      for(let y=0; y<ROWS; y++) {
+        if(this.grid[y].some(cell => cell !== null)) {
+          highestRow = y;
+          break;
+        }
+      }
+      // Use a dynamic interval for garbage row, less frequent if stack is low
+      if (!this.nextGarbageInterval) {
+        this.nextGarbageInterval = 12 + Math.floor(Math.random() * 5); // 12-16
+      }
+      let interval = this.nextGarbageInterval;
+      const lowStackThreshold = 12; // Change this value for desired height
+      if (highestRow < lowStackThreshold) {
+        interval *= 2; // Garbage appears half as often when stack is low
+      }
+      if(this.lockCount % interval === 0){
+        // After adding garbage, randomize the next interval
+        this.addGarbageRow(()=> {
+          this.nextGarbageInterval = 12 + Math.floor(Math.random() * 5);
+          this.spawn();
+        });
+      } else {
+        this.spawn();
+      }
+    }
+
+    addGarbageRow(cb){
+      // if top row has any block, game over on push
+      if(this.grid[0].some(c=>!!c)) { this.endGame(); return; }
+      // shift everything up by 1
+      for(let y=0; y<ROWS-1; y++){
+        for(let x=0; x<COLS; x++){
+          this.grid[y][x] = this.grid[y+1][x];
+          const cell = this.grid[y][x];
+          if(cell?.obj){ this.tweens.add({targets:cell.obj, y: gy(y)+CELL/2, duration:120}); }
+        }
+      }
+      // new bottom row with holes, fewer as score increases
+      const junk = ['D','E','I','O','N','R','X','Z','Q'];
+      // Max holes decreases as score increases (min 1, max 5)
+      let maxHoles = 5;
+      if (this.score > 4000) maxHoles = 1;
+      else if (this.score > 3000) maxHoles = 2;
+      else if (this.score > 2000) maxHoles = 3;
+      else if (this.score > 1000) maxHoles = 4;
+      // Always at least 1 hole
+      const numHoles = 1 + Math.floor(Math.random() * maxHoles);
+      const holeIndices = [];
+      while (holeIndices.length < numHoles) {
+        const idx = Math.floor(Math.random() * COLS);
+        if (!holeIndices.includes(idx)) holeIndices.push(idx);
+      }
+      for(let x=0;x<COLS;x++){
+        if(holeIndices.includes(x)){ this.grid[ROWS-1][x] = null; continue; }
+        const letter = junk[Math.floor(Math.random()*junk.length)];
+        this.createLocked(letter, x, ROWS-1);
+      }
+      this.time.delayedCall(130, cb);
+    }
+
+  // ...existing code...
+
+    refillQueue(n=3){ while(this.nextQueue.length < n) this.nextQueue.push(randLetter()); }
+
+    drawPreview(){
+      this.previewGroup.removeAll(true);
+      const pad = 6;
+      for(let i=0;i<Math.min(3,this.nextQueue.length);i++){
+        const letter = this.nextQueue[i];
+        const x = i*(CELL+pad);
+        const color = TILE_COLORS[letter] ?? TILE_COLORS.other;
+        const box = this.add.rectangle(x + CELL/2, CELL/2, CELL-6, CELL-6, color).setOrigin(0.5);
+        let glyph = letter; if(letter==='*') glyph='✱'; if(letter==='M') glyph='✦';
+        const t = this.add.text(x + CELL/2, CELL/2, glyph, {fontSize:18, color:'#0b0f16'}).setOrigin(0.5);
+        this.previewGroup.add([box,t]);
+      }
+    }
+
+    hardDrop(){ if(!this.active) return; let {x,y}=this.active; while(this.canMove(x,y+1)) y++; this.setActivePos(x,y); this.lockPiece(); }
+
+    updateGhost(){
+      this.ghost.clear(); if(!this.active) return; let {x,y}=this.active; while(this.canMove(x,y+1)) y++; this.ghost.lineStyle(2, COLORS.ghost, 1); this.ghost.strokeRect(gx(x)+2, gy(y)+2, CELL-4, CELL-4);
+    }
+
+    lockPiece(){
+      const {x,y,letter,cont} = this.active; this.active=null;
+      if(letter==='B'){
+        let cleared=0;
+        for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+          const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
+          const cell = this.grid[ny][nx];
+          if(cell?.obj){ this.tweens.add({targets:cell.obj, alpha:0, scale:0.6, duration:120, onComplete:()=>cell.obj.destroy()}); this.grid[ny][nx]=null; cleared++; }
+          else { this.grid[ny][nx]=null; }
+        }
+        cont.destroy();
+        if (cleared>0) this.addScore(cleared*20);
+        return this.time.delayedCall(130, ()=> this.applyGravity(()=> this.resolveMatchesAndGravity(()=> this.postLockContinue())));
+      }
+      if(letter ==='M'){
+        // Clear both the row and the column
+        for(let cx=0; cx<COLS; cx++){
+          const cell=this.grid[y][cx];
+          if(cell?.obj){ this.tweens.add({targets:cell.obj, alpha:0, duration:100, onComplete:()=>cell.obj.destroy()}); }
+          this.grid[y][cx]=null;
+        }
+        for(let cy=0; cy<ROWS; cy++){
+          if (cy === y) continue; // already cleared this row
+          const cell=this.grid[cy][x];
+          if(cell?.obj){ this.tweens.add({targets:cell.obj, alpha:0, duration:100, onComplete:()=>cell.obj.destroy()}); }
+          this.grid[cy][x]=null;
+        }
+        cont.destroy();
+        this.addScore(150);
+        return this.time.delayedCall(130, ()=> this.applyGravity(()=> this.resolveMatchesAndGravity(()=> this.postLockContinue())));
+      }
+  this.grid[y][x] = { letter, obj: cont };
+  this.resolveMatchesAndGravity(()=> this.postLockContinue());
+    }
+
+    // ----- Match & gravity -----
+    matchCell(cell, want){ return !!cell && (cell.letter===want || cell.letter==='*'); }
+    findMatches(){
+      const toClear = new Set();
+      let tripleCount = 0; let diagCount = 0;
+      const get = (x, y) => inBounds(x, y) ? this.grid[y][x] : null;
+      const isA = (c) => !!c && (c.letter === 'A' || c.letter === '*');
+      const isT = (c) => !!c && (c.letter === 'T' || c.letter === '*');
+      const isS = (c) => !!c && (c.letter === 'S' || c.letter === '*');
+      // Helper to add cell to set
+      function addCell(x, y) {
+        if (x >= 0 && x < COLS && y >= 0 && y < ROWS) toClear.add(y * 100 + x);
+      }
+      for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+        const c = get(x, y); if (!isA(c)) continue;
+        // Horizontal
+        if (isT(get(x + 1, y)) && isS(get(x + 2, y))) {
+          for (let cx = 0; cx < COLS; cx++) addCell(cx, y);
+          tripleCount++;
+        }
+        // Vertical
+        if (isT(get(x, y + 1)) && isS(get(x, y + 2))) {
+          for (let cy = 0; cy < ROWS; cy++) addCell(x, cy);
+          tripleCount++;
+        }
+        // Diagonal down-right
+        if (isT(get(x + 1, y + 1)) && isS(get(x + 2, y + 2))) {
+          let dx = x, dy = y;
+          while (dx >= 0 && dy >= 0) { dx--; dy--; }
+          dx++; dy++;
+          while (dx < COLS && dy < ROWS) { addCell(dx, dy); dx++; dy++; }
+          tripleCount++; diagCount++;
+        }
+        /*
+        // Diagonal down-left
+        if (isT(get(x - 1, y + 1)) && isS(get(x - 2, y + 2))) {
+          let dx = x, dy = y;
+          while (dx < COLS && dy >= 0) { dx++; dy--; }
+          dx--; dy++;
+          while (dx >= 0 && dy < ROWS) { addCell(dx, dy); dx--; dy++; }
+          tripleCount++; diagCount++;
+        } 
+        // Diagonal up-left
+        if (isT(get(x - 1, y - 1)) && isS(get(x - 2, y - 2))) {
+          let dx = x, dy = y;
+          while (dx < COLS && dy < ROWS) { dx++; dy++; }
+          dx--; dy--;
+          while (dx >= 0 && dy >= 0) { addCell(dx, dy); dx--; dy--; }
+          tripleCount++; diagCount++;
+        } */
+        // Diagonal up-right
+        if (isT(get(x + 1, y - 1)) && isS(get(x + 2, y - 2))) {
+          let dx = x, dy = y;
+          while (dx >= 0 && dy < ROWS) { dx--; dy++; }
+          dx++; dy--;
+          while (dx < COLS && dy >= 0) { addCell(dx, dy); dx++; dy--; }
+          tripleCount++; diagCount++;
+        }
+      }
+      return {toClear, tripleCount, diagCount};
+    }
+
+    addScore(v){
+      this.score += v;
+      this.scoreText.setText('Score: ' + this.score);
+      if(this.score > this.best){ this.best = this.score; localStorage.setItem('ats-best', String(this.best)); this.bestText.setText(`Best: ${this.best}`); }
+    }
+
+    resolveMatchesAndGravity(done){
+      let chain = 0;
+      const step=()=>{
+        const {toClear, tripleCount, diagCount} = this.findMatches();
+        // scoring: base 100 per triple, +25 per diagonal triple, +50 per triple per extra chain step
+        if (tripleCount > 0) {
+          const gain = 100 * tripleCount + 25 * diagCount + Math.max(0, (chain)) * 50 * tripleCount;
+          this.addScore(gain);
+        }
+        if(toClear.size===0) return done();
+        chain++;
+        toClear.forEach(key=>{
+          const x=key%100, y=(key/100)|0; const item=this.grid[y][x];
+          if(item){ this.tweens.add({targets:item.obj, alpha:0, scale:0.6, duration:120, onComplete:()=>item.obj.destroy()}); }
+          this.grid[y][x]=null;
+        });
+        this.time.delayedCall(130, ()=> this.applyGravity(step));
+      };
+      step();
+    }
+
+    applyGravity(cb){
+      const moves=[];
+      for(let x=0;x<COLS;x++){
+        let write=ROWS-1;
+        for(let y=ROWS-1;y>=0;y--){
+          if(this.grid[y][x]){
+            if(y!==write){ this.grid[write][x]=this.grid[y][x]; this.grid[y][x]=null; moves.push({x,y:write,obj:this.grid[write][x].obj}); }
+            write--;
+          }
+        }
+      }
+      moves.forEach(m=> this.tweens.add({targets:m.obj, x: gx(m.x)+CELL/2, y: gy(m.y)+CELL/2, duration:120, ease:'Quad.easeIn'}));
+      this.time.delayedCall(130, cb);
+    }
+
+    // ----- Game state -----
+    endGame(){
+      this.gameOver=true; this.paused=true;
+      this.gameOverText = this.add.text(VIEW_W/2, VIEW_H/2 - 56, 'Game Over', {fontSize:24, color:'#fff'}).setOrigin(0.5).setDepth(20);
+      const final = this.score;
+      const elapsed = (Date.now() - (this.gameStartTime || Date.now())) / 1000;
+      this.showNameEntry(final, this.lockCount, elapsed);
+    }
+
+    restart(){
+      // Extra guard: do not allow restart before initial click-to-start
+      if (!this.started) return;
+      // if (this.lbOpen) { this.toggleLeaderboard(); }
+      if (this.gameOverText) { this.gameOverText.destroy(); this.gameOverText = null; }
+      if (this.restartHint) { this.restartHint.destroy(); this.restartHint = null; }
+      if (this.nameOverlayRoot) { try { document.body.removeChild(this.nameOverlayRoot); } catch {} this.nameOverlayRoot = null; }
+      for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){ const cell=this.grid[y][x]; if(cell?.obj) cell.obj.destroy(); this.grid[y][x]=null; }
+      if(this.active?.cont) { this.active.cont.destroy(); this.active=null; }
+      this.ghost.clear();
+      this.dropTimer=0; this.gameOver=false; this.paused=false; this.started=true; this.score=0; this.scoreText.setText('Score: 0');
+      this.lockCount = 0; this.nextGarbageInterval = undefined; this.nextQueue=[]; this.gameStartTime = Date.now();
+      this.refillQueue(3); this.drawPreview();
+      this.spawn();
+    }
+
+    toggleLeaderboard(){
+      if (this.lbOpen) {
+        this.lbOpen = false;
+        this.paused = this.gameOver ? true : false;
+        if (this.lbOverlay) { this.lbOverlay.destroy(); this.lbOverlay = null; }
+        if (this.lbTitle) { this.lbTitle.destroy(); this.lbTitle = null; }
+        if (this.lbList) { this.lbList.destroy(); this.lbList = null; }
+        if (this.lbFooter) { this.lbFooter.destroy(); this.lbFooter = null; }
+        return;
+      }
+      this.lbOpen = true;
+      this.paused = true;
+      this.lbOverlay = this.add.rectangle(0,0,VIEW_W,VIEW_H,0x000000,0.7).setOrigin(0).setDepth(30);
+      this.lbTitle = this.add.text(VIEW_W/2, MARGIN+18, 'Leaderboard (Top 10)', {fontSize:20, color:'#ffffff'}).setOrigin(0.5).setDepth(31);
+      // Tabs (Today / Week / All)
+      this.lbPeriod = this.lbPeriod || 'all';
+      const tabY = MARGIN+40;
+      const mkTab = (label, x, period)=>{
+        const t = this.add.text(x, tabY, label, {fontSize:12, color:'#cbd5e1'}).setDepth(31).setInteractive({useHandCursor:true});
+        t.on('pointerdown', ()=>{ this.lbPeriod = period; reload(); updateTabs(); });
+        return t;
+      };
+      this.lbTabToday = mkTab('Today', MARGIN+24, 'today');
+      this.lbTabWeek  = mkTab('Week', MARGIN+90, 'week');
+      this.lbTabAll   = mkTab('All-time', MARGIN+150, 'all');
+      const updateTabs = ()=>{
+        const active = this.lbPeriod;
+        [this.lbTabToday,this.lbTabWeek,this.lbTabAll].forEach(t=> t.setAlpha( t.text.toLowerCase().includes('all')? (active==='all'?1:0.6): (t.text.toLowerCase()===(active==='today'?'today':'week')?1:0.6)));
+      };
+      updateTabs();
+      this.lbList = this.add.text(MARGIN+24, MARGIN+66, 'Loading…', {fontSize:16, color:'#e7e9ee'}).setDepth(31);
+      this.lbFooter = this.add.text(VIEW_W/2, VIEW_H - MARGIN - 20, 'Press L to close', {fontSize:12, color:'#cbd5e1'}).setOrigin(0.5).setDepth(31);
+      const render = (rows)=>{
+// ...fixed unterminated string...
+  if(!rows || rows.length===0){ this.lbList.setText('No scores yet — be the first!'); return; }
+  const lines = rows.map((r,i)=> `${String(i+1).padStart(2,' ')}. ${r.name||'anon'} — ${r.score}`);
+  this.lbList.setText(lines.join("\n"));
+      };
+      const reload = ()=>{
+        fetchTopOnline(10, this.lbPeriod).then(res=>{
+          render(res.ok ? res.rows : []);
+        }).catch(()=> render([]));
+      };
+      reload();
+    }
+
+    showNameEntry(finalScore, lockCount, elapsedSeconds){
+  // Completely disable R key restart while overlay is open (so input is never blocked)
+  if (this.keyR && this.keyRListener) this.keyR.off('down', this.keyRListener);
+      const root = document.createElement('div');
+      this.nameOverlayRoot = root;
+      root.style.position = 'fixed';
+      const rect = document.getElementById('game-container').getBoundingClientRect();
+      root.style.left = rect.left + 'px';
+      root.style.top = rect.top + 'px';
+      root.style.width = rect.width + 'px';
+      root.style.height = rect.height + 'px';
+      root.style.display = 'grid';
+      root.style.placeItems = 'center';
+      root.style.zIndex = 9999;
+      root.style.background = 'rgba(0,0,0,0.35)';
+
+      const panel = document.createElement('div');
+      panel.style.background = '#0f1115';
+      panel.style.border = '1px solid #333842';
+      panel.style.borderRadius = '10px';
+      panel.style.padding = '16px 18px';
+      panel.style.color = '#e7e9ee';
+      panel.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+      panel.style.boxShadow = '0 10px 30px rgba(0,0,0,.45)';
+      panel.innerHTML = `<div style="font-size:18px;font-weight:700;margin-bottom:4px;">Submit Score</div>
+        <div style="font-size:13px;opacity:.8;margin-bottom:10px;">Final score: <b>${finalScore}</b></div>`;
+
+      const form = document.createElement('form');
+      form.style.display = 'flex';
+      form.style.gap = '8px';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Your name (optional)';
+      input.value = localStorage.getItem('ats-name') || '';
+      input.style.padding = '8px 10px';
+      input.style.borderRadius = '8px';
+      input.style.border = '1px solid #394151';
+      input.style.background = '#0b0f16';
+      input.style.color = '#e7e9ee';
+      input.style.outline = 'none';
+      input.style.minWidth = '220px';
+
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.textContent = 'Save';
+      submit.style.padding = '8px 12px';
+      submit.style.borderRadius = '8px';
+      submit.style.border = '1px solid #394151';
+      submit.style.background = '#1f2937';
+      submit.style.color = '#e7e9ee';
+      submit.style.cursor = 'pointer';
+
+      const skip = document.createElement('button');
+      skip.type = 'button';
+      skip.textContent = 'Skip';
+      skip.style.padding = '8px 12px';
+      skip.style.borderRadius = '8px';
+      skip.style.border = '1px solid #394151';
+      skip.style.background = '#111827';
+      skip.style.color = '#cbd5e1';
+      skip.style.cursor = 'pointer';
+
+      form.appendChild(input); form.appendChild(submit); form.appendChild(skip);
+      panel.appendChild(form);
+      root.appendChild(panel);
+      document.body.appendChild(root);
+
+      const finish = ()=>{
+  // Re-enable R key after overlay closes
+  if (this.keyR && this.keyRListener) this.keyR.on('down', this.keyRListener);
+        try { if(this.nameOverlayRoot){ document.body.removeChild(this.nameOverlayRoot); this.nameOverlayRoot=null; } } catch {}
+        // this.restartHint = this.add.text(VIEW_W/2, VIEW_H/2 + 16, 'Click to restart • Press L to view Leaderboard', {fontSize:14, color:'#e5e7eb'}).setOrigin(0.5).setDepth(20);
+  // Re-enable R key after overlay closes
+  if (this.keyR && this.keyRListener) this.keyR.on('down', this.keyRListener);
+  this.restartHint = this.add.text(VIEW_W/2, VIEW_H/2 + 16, 'Click to restart', {fontSize:14, color:'#e5e7eb'}).setOrigin(0.5).setDepth(20);
+  this.input.once('pointerdown', ()=> this.restart());
+      };
+
+      const status = document.createElement('div');
+      status.style.cssText = 'margin-top:8px;font-size:12px;min-height:16px;';
+      panel.appendChild(status);
+
+      skip.addEventListener('click', (e)=>{ e.preventDefault(); finish(); });
+      form.addEventListener('submit', (e)=>{
+        e.preventDefault();
+        const name = (input.value || '').trim();
+        if (name) {
+          localStorage.setItem('ats-name', name);
+          submit.disabled = true; submit.textContent = 'Saving…';
+          postOnlineScore(name, finalScore, lockCount, elapsedSeconds).then(r=>{
+            if(r && r.ok === false){
+              status.style.color = '#ff5d5d';
+              status.textContent = 'Not saved: ' + (r.reason || 'unknown error');
+              submit.disabled = false; submit.textContent = 'Save';
+            } else {
+              status.style.color = '#5bd08a';
+              status.textContent = 'Saved!';
+              setTimeout(finish, 800);
+            }
+          });
+        } else {
+          finish();
+        }
+      });
+
+      // Stop Phaser from catching keystrokes while typing
+      root.addEventListener('keydown', (e)=>{ e.stopPropagation(); }, true);
+      input.addEventListener('keydown', (e)=>{ e.stopPropagation(); }, true);
+      setTimeout(()=> input.focus(), 0);
+    }
+
+    update(_, dt){
+      if(this.paused || this.gameOver || !this.started) return;
+      // Ramp dropInterval down as score or lockCount rises (faster drop)
+      // You can tune the formula as needed for difficulty
+      const minInterval = 150;
+      // Example: base 700ms, minus 5ms per lock, minus 1ms per 50 score, never below minInterval
+      this.dropInterval = Math.max(minInterval, 700 - this.lockCount * 5 - Math.floor(this.score / 50));
+      this.dropTimer += dt;
+      if(this.dropTimer >= this.dropInterval){
+        this.dropTimer = 0;
+        if(this.active){
+          const {x,y} = this.active;
+          if(this.canMove(x, y+1)) this.setActivePos(x, y+1);
+          else this.lockPiece();
+        }
+      }
+      const a=this.active; if(!a) return;
+      if(Phaser.Input.Keyboard.JustDown(this.cursors.left))  { if(this.canMove(a.x-1,a.y)) this.setActivePos(a.x-1,a.y); }
+      if(Phaser.Input.Keyboard.JustDown(this.cursors.right)) { if(this.canMove(a.x+1,a.y)) this.setActivePos(a.x+1,a.y); }
+      if(this.cursors.down.isDown) { if(this.canMove(a.x,a.y+1)) this.setActivePos(a.x,a.y+1); }
+    }
+  }
+
+new Phaser.Game({ type:Phaser.AUTO, parent:'game-container', width:VIEW_W, height:VIEW_H, backgroundColor:'#0e0f12', scene:[GameScene], pixelArt:true, antialias:true });
+})();
+</script>
+</body>
+</html>
