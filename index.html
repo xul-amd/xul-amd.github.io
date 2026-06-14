@@ -1,47 +1,912 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to xul-amd.github.io</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-        }
-        .container {
-            background: #fff;
-            padding: 2rem 3rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            color: #666;
-        }
-        a {
-            color: #007acc;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="tetris.ico" type="image/x-icon">
+<title>ATS-Semble - Play & Win</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #1a0d3d;
+  --bg2: #2D1B69;
+  --neon: #E040FB;
+  --neon2: #ff6ef7;
+  --gold: #FFD600;
+  --gold2: #ffea70;
+  --cyan: #00f5ff;
+  --green: #39ff14;
+  --white: #f0e6ff;
+  --muted: #a88fd4;
+  --pixel: 'Press Start 2P', monospace;
+  --body: 'Rajdhani', sans-serif;
+  --glow-neon: 0 0 10px #E040FB, 0 0 20px #E040FB, 0 0 40px #E040FB;
+  --glow-gold: 0 0 10px #FFD600, 0 0 20px #FFD600;
+  --glow-cyan: 0 0 8px #00f5ff, 0 0 16px #00f5ff;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--body);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Animated background stars */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 40%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 10%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 25%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 20% 75%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 80%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 45% 85%, rgba(224,64,251,0.4) 0%, transparent 100%),
+    radial-gradient(2px 2px at 65% 30%, rgba(255,214,0,0.3) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* === PAGE CONTAINER === */
+.page {
+  width: 100%;
+  max-width: 800px;
+  position: relative;
+  z-index: 1;
+}
+
+/* === PIXEL BORDER MIXIN === */
+.pixel-box {
+  border: 3px solid var(--neon);
+  box-shadow:
+    var(--glow-neon),
+    inset 0 0 20px rgba(224,64,251,0.05);
+  position: relative;
+}
+
+.pixel-box::before, .pixel-box::after {
+  content: '';
+  position: absolute;
+  background: var(--neon);
+  width: 8px; height: 8px;
+  box-shadow: var(--glow-neon);
+}
+.pixel-box::before { top: -5px; left: -5px; }
+.pixel-box::after  { bottom: -5px; right: -5px; }
+
+.gold-box {
+  border: 3px solid var(--gold);
+  box-shadow:
+    var(--glow-gold),
+    inset 0 0 20px rgba(255,214,0,0.05);
+  position: relative;
+}
+
+/* === HEADER === */
+.header {
+  background: linear-gradient(135deg, #1a0d3d 0%, #2D1B69 50%, #1a0d3d 100%);
+  padding: 36px 32px 28px;
+  text-align: center;
+  border: 3px solid var(--neon);
+  border-bottom: none;
+  box-shadow: var(--glow-neon);
+  position: relative;
+  overflow: hidden;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(224,64,251,0.03) 50%, transparent 100%),
+    repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(224,64,251,0.02) 20px, rgba(224,64,251,0.02) 21px);
+  pointer-events: none;
+}
+
+.corner-decor {
+  position: absolute;
+  width: 24px; height: 24px;
+  border-color: var(--gold);
+  border-style: solid;
+}
+.corner-decor.tl { top: 8px; left: 8px;  border-width: 3px 0 0 3px; box-shadow: -3px -3px 8px var(--gold); }
+.corner-decor.tr { top: 8px; right: 8px; border-width: 3px 3px 0 0; box-shadow:  3px -3px 8px var(--gold); }
+.corner-decor.bl { bottom: 8px; left: 8px;  border-width: 0 0 3px 3px; box-shadow: -3px 3px 8px var(--gold); }
+.corner-decor.br { bottom: 8px; right: 8px; border-width: 0 3px 3px 0; box-shadow:  3px  3px 8px var(--gold); }
+
+.title-block {
+  display: inline-block;
+  position: relative;
+}
+
+.game-title {
+  font-family: var(--pixel);
+  font-size: clamp(22px, 5vw, 36px);
+  letter-spacing: 4px;
+  line-height: 1.3;
+  color: var(--gold);
+  text-shadow: var(--glow-gold), 3px 3px 0 #b8960a;
+  animation: titlePulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% { text-shadow: 0 0 10px #FFD600, 0 0 20px #FFD600, 3px 3px 0 #b8960a; }
+  50% { text-shadow: 0 0 20px #FFD600, 0 0 40px #FFD600, 0 0 60px #FFD600, 3px 3px 0 #b8960a; }
+}
+
+.title-letters span {
+  display: inline-block;
+}
+.title-letters .a { color: #4fc3f7; text-shadow: 0 0 10px #4fc3f7, 0 0 20px #4fc3f7, 3px 3px 0 #1a6b96; }
+.title-letters .t { color: #ff8a00; text-shadow: 0 0 10px #ff8a00, 0 0 20px #ff8a00, 3px 3px 0 #964000; }
+.title-letters .s { color: #69f0ae; text-shadow: 0 0 10px #69f0ae, 0 0 20px #69f0ae, 3px 3px 0 #1a7a44; }
+.title-letters .dash { color: var(--neon); text-shadow: var(--glow-neon); }
+.title-letters .rest { color: var(--gold); text-shadow: var(--glow-gold); }
+
+.tagline {
+  font-family: var(--pixel);
+  font-size: clamp(7px, 1.5vw, 10px);
+  color: var(--muted);
+  letter-spacing: 3px;
+  margin-top: 10px;
+  text-transform: uppercase;
+}
+
+.subtagline {
+  font-family: var(--body);
+  font-size: clamp(16px, 3vw, 22px);
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--neon2);
+  text-shadow: var(--glow-neon);
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+/* Tetris block row decoration */
+.block-row {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.blk {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  position: relative;
+}
+.blk::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  opacity: 0.4;
+  background: rgba(255,255,255,0.3);
+}
+.blk.b1 { background: #4fc3f7; box-shadow: 0 0 6px #4fc3f7; }
+.blk.b2 { background: #ff8a00; box-shadow: 0 0 6px #ff8a00; }
+.blk.b3 { background: #69f0ae; box-shadow: 0 0 6px #69f0ae; }
+.blk.b4 { background: #E040FB; box-shadow: 0 0 6px #E040FB; }
+.blk.b5 { background: #FFD600; box-shadow: 0 0 6px #FFD600; }
+.blk.b6 { background: #ff4081; box-shadow: 0 0 6px #ff4081; }
+.blk.b7 { background: #00f5ff; box-shadow: 0 0 6px #00f5ff; }
+
+/* === CALLOUT BOX === */
+.callout {
+  background: linear-gradient(135deg, rgba(224,64,251,0.12), rgba(45,27,105,0.8));
+  border: 2px solid var(--neon);
+  border-top: none;
+  border-bottom: none;
+  padding: 20px 32px;
+  position: relative;
+}
+
+.callout::before {
+  content: '▶ ATS BROADCAST ◀';
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--neon);
+  text-shadow: var(--glow-neon);
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.callout p {
+  font-family: var(--body);
+  font-size: clamp(14px, 2.2vw, 17px);
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--white);
+  text-align: center;
+}
+
+.callout strong {
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+}
+
+/* === SECTION LABEL === */
+.section-label {
+  font-family: var(--pixel);
+  font-size: clamp(8px, 1.8vw, 11px);
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 0 4px;
+  display: inline-block;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-line {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  box-shadow: 0 0 6px var(--gold);
+}
+
+.section-line.rev {
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+/* === EVENT DETAILS === */
+.details-section {
+  background: linear-gradient(135deg, rgba(45,27,105,0.9), rgba(26,13,61,0.9));
+  border: 2px solid var(--neon);
+  border-top: none;
+  border-bottom: none;
+  padding: 24px 32px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(224,64,251,0.06);
+  border: 1px solid rgba(224,64,251,0.2);
+  border-radius: 0;
+  padding: 10px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--neon);
+  box-shadow: var(--glow-neon);
+}
+
+.detail-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.detail-content { display: block; }
+.detail-label {
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.detail-value {
+  font-family: var(--body);
+  font-size: clamp(13px, 2vw, 15px);
+  font-weight: 600;
+  color: var(--white);
+  line-height: 1.3;
+}
+
+.detail-item.prize .detail-value {
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+}
+
+.detail-item.prize-wide {
+  grid-column: 1 / -1;
+}
+
+.prize-breakdown {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.prize-tier {
+  background: rgba(255,214,0,0.1);
+  border: 1px solid rgba(255,214,0,0.3);
+  padding: 3px 10px;
+  font-family: var(--body);
+  font-size: clamp(12px, 1.8vw, 14px);
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+  white-space: nowrap;
+}
+
+.prize-tier.merit {
+  background: rgba(224,64,251,0.1);
+  border-color: rgba(224,64,251,0.3);
+  color: var(--neon2);
+  text-shadow: var(--glow-neon);
+}
+
+.detail-item.link-item .detail-value {
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+  font-size: clamp(13px, 2vw, 15px);
+  font-weight: 600;
+}
+
+.detail-item.link-item a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.detail-item.link-item a .detail-label,
+.detail-item.link-item a .detail-value {
+  pointer-events: none;
+}
+
+/* === HOW TO PLAY === */
+.how-section {
+  background: linear-gradient(135deg, rgba(26,13,61,0.95), rgba(45,27,105,0.85));
+  border: 2px solid var(--neon);
+  border-top: none;
+  border-bottom: none;
+  padding: 24px 32px;
+}
+
+.how-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.how-col {}
+
+.col-title {
+  font-family: var(--pixel);
+  font-size: clamp(7px, 1.4vw, 9px);
+  color: var(--neon);
+  text-shadow: var(--glow-neon);
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(224,64,251,0.3);
+}
+
+.how-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.how-list li {
+  font-family: var(--body);
+  font-size: clamp(13px, 2vw, 15px);
+  font-weight: 500;
+  color: var(--white);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.how-list li .key {
+  font-family: var(--pixel);
+  font-size: 8px;
+  background: rgba(224,64,251,0.15);
+  border: 1px solid var(--neon);
+  color: var(--neon);
+  padding: 2px 5px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  box-shadow: 0 0 6px rgba(224,64,251,0.3);
+  line-height: 1.6;
+}
+
+.how-list li .sp-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.goal-note {
+  margin-top: 10px;
+  background: rgba(255,214,0,0.08);
+  border: 1px solid rgba(255,214,0,0.3);
+  border-left: 3px solid var(--gold);
+  padding: 8px 10px;
+  font-family: var(--body);
+  font-size: clamp(12px, 1.8vw, 14px);
+  color: var(--gold2);
+  line-height: 1.4;
+}
+
+.hazard { color: #ff6b6b; }
+.special-cyan { color: var(--cyan); text-shadow: var(--glow-cyan); }
+.special-gold { color: var(--gold); text-shadow: var(--glow-gold); }
+.special-green { color: var(--green); text-shadow: 0 0 8px var(--green); }
+
+/* === SCORING === */
+.score-section {
+  background: linear-gradient(135deg, rgba(45,27,105,0.9), rgba(26,13,61,0.95));
+  border: 2px solid var(--neon);
+  border-top: none;
+  border-bottom: none;
+  padding: 24px 32px;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.score-card {
+  background: rgba(224,64,251,0.06);
+  border: 1px solid rgba(224,64,251,0.25);
+  padding: 12px 10px;
+  text-align: center;
+  position: relative;
+  transition: border-color 0.2s;
+}
+
+.score-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--neon);
+  box-shadow: var(--glow-neon);
+}
+
+.score-card.gold-card {
+  border-color: rgba(255,214,0,0.35);
+  background: rgba(255,214,0,0.06);
+}
+.score-card.gold-card::after {
+  background: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+
+.score-pts {
+  font-family: var(--pixel);
+  font-size: clamp(11px, 2vw, 14px);
+  color: var(--gold);
+  text-shadow: var(--glow-gold);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.score-label {
+  font-family: var(--body);
+  font-size: clamp(11px, 1.6vw, 13px);
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* === FOOTER CTA === */
+.footer-cta {
+  background: linear-gradient(135deg, #2D1B69 0%, #1a0d3d 50%, #2D1B69 100%);
+  border: 3px solid var(--gold);
+  border-top: none;
+  box-shadow: var(--glow-gold), inset 0 0 30px rgba(255,214,0,0.03);
+  padding: 28px 32px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.footer-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(255,214,0,0.015) 8px,
+    rgba(255,214,0,0.015) 9px
+  );
+  pointer-events: none;
+}
+
+.cta-headline {
+  font-family: var(--pixel);
+  font-size: clamp(9px, 2vw, 13px);
+  color: var(--white);
+  letter-spacing: 1px;
+  line-height: 2;
+  margin-bottom: 18px;
+}
+
+.play-btn {
+  display: inline-block;
+  font-family: var(--pixel);
+  font-size: clamp(9px, 2vw, 13px);
+  color: var(--bg);
+  background: var(--gold);
+  padding: 14px 28px;
+  text-decoration: none;
+  letter-spacing: 2px;
+  box-shadow: var(--glow-gold), 4px 4px 0 #b8960a;
+  transition: transform 0.1s, box-shadow 0.1s;
+  position: relative;
+  border: none;
+  cursor: pointer;
+  animation: btnPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes btnPulse {
+  0%, 100% { box-shadow: 0 0 10px #FFD600, 0 0 20px #FFD600, 4px 4px 0 #b8960a; }
+  50% { box-shadow: 0 0 20px #FFD600, 0 0 40px #FFD600, 0 0 60px #FFD600, 4px 4px 0 #b8960a; }
+}
+
+.play-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 0 0 30px #FFD600, 0 0 60px #FFD600, 6px 6px 0 #b8960a;
+}
+
+.cta-note {
+  font-family: var(--body);
+  font-size: clamp(11px, 1.6vw, 13px);
+  color: var(--muted);
+  margin-top: 16px;
+  line-height: 1.5;
+}
+
+.cta-note strong {
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+}
+
+/* NTID chip */
+.ntid-chip {
+  display: inline-block;
+  background: rgba(0,245,255,0.1);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 2px 8px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  box-shadow: var(--glow-cyan);
+}
+
+/* Divider line between sections */
+.divider {
+  height: 0;
+  border: none;
+  border-top: 1px solid rgba(224,64,251,0.2);
+}
+
+/* === PRINT STYLES === */
+@media print {
+  @page { size: A4; margin: 10mm; }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    padding: 0;
+  }
+
+  body::before, body::after { display: none !important; }
+
+  .page { max-width: 100%; }
+
+  .header, .callout, .details-section, .how-section, .score-section, .footer-cta {
+    background: #fff !important;
+    box-shadow: none !important;
+    border-color: #333 !important;
+  }
+
+  .game-title, .section-label, .col-title, .cta-headline, .play-btn,
+  .score-pts, .detail-label, .detail-value, .how-list li {
+    color: #111 !important;
+    text-shadow: none !important;
+  }
+
+  .subtagline { color: #555 !important; }
+  .tagline { color: #444 !important; }
+  .callout p, .cta-note { color: #222 !important; }
+  .detail-value.prize-val, .score-pts { color: #000 !important; font-weight: 900 !important; }
+
+  .play-btn {
+    background: #111 !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    border: 2px solid #111 !important;
+  }
+
+  .blk, .corner-decor, .section-line, .block-row { display: none !important; }
+
+  @keyframes titlePulse { 0%,100% { text-shadow: none; } }
+  @keyframes btnPulse { 0%,100% { box-shadow: none; } }
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 600px) {
+  .details-grid { grid-template-columns: 1fr; }
+  .how-grid { grid-template-columns: 1fr; }
+  .score-grid { grid-template-columns: repeat(3, 1fr); }
+  .header, .callout, .details-section, .how-section, .score-section, .footer-cta {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome!</h1>
-        <p>Visit the <a href="./tetris/">Tetris Game</a>.</p>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="corner-decor tl"></div>
+    <div class="corner-decor tr"></div>
+    <div class="corner-decor bl"></div>
+    <div class="corner-decor br"></div>
+
+    <div class="title-block">
+      <div class="game-title">
+        <span class="title-letters">
+          <span class="a">A</span><span class="t">T</span><span class="s">S</span><span class="dash">-</span><span class="rest">SEMBLE</span>
+        </span>
+      </div>
+      <div class="tagline">A Tetris-Inspired Puzzle Game</div>
+      <div class="subtagline">Stack &nbsp;·&nbsp; Clear &nbsp;·&nbsp; Compete</div>
     </div>
+
+    <div class="block-row">
+      <div class="blk b1"></div>
+      <div class="blk b2"></div>
+      <div class="blk b3"></div>
+      <div class="blk b4"></div>
+      <div class="blk b5"></div>
+      <div class="blk b6"></div>
+      <div class="blk b7"></div>
+      <div class="blk b1"></div>
+      <div class="blk b2"></div>
+      <div class="blk b3"></div>
+      <div class="blk b4"></div>
+      <div class="blk b5"></div>
+    </div>
+  </div>
+
+  <!-- CALLOUT -->
+  <div class="callout">
+    <p>
+      Hey <strong>AMDers</strong> — Ready to stack, swap, and strategize?
+      ATS is bringing you a brand new challenge with <strong>ATS-Semble</strong>,
+      our Tetris-inspired puzzle game! Play throughout the event period,
+      climb the leaderboard, and <strong>win cash prizes up to $300!</strong>
+    </p>
+  </div>
+
+  <!-- EVENT DETAILS -->
+  <div class="details-section">
+    <div class="section-header">
+      <div class="section-line"></div>
+      <span class="section-label">Event Details</span>
+      <div class="section-line rev"></div>
+    </div>
+
+    <div class="details-grid">
+      <div class="detail-item">
+        <div class="detail-icon">📅</div>
+        <div class="detail-content">
+          <div class="detail-label">Event Period</div>
+          <div class="detail-value">12-26 Oct 2026</div>
+        </div>
+      </div>
+
+      <div class="detail-item">
+        <div class="detail-icon">🎮</div>
+        <div class="detail-content">
+          <div class="detail-label">Format</div>
+          <div class="detail-value">Play anytime — no daily limits!</div>
+        </div>
+      </div>
+
+      <div class="detail-item">
+        <div class="detail-icon">💻</div>
+        <div class="detail-content">
+          <div class="detail-label">Platform</div>
+          <div class="detail-value">Browser-based — keyboard or touch</div>
+        </div>
+      </div>
+
+      <div class="detail-item">
+        <div class="detail-icon">🏆</div>
+        <div class="detail-content">
+          <div class="detail-label">How to Start</div>
+          <div class="detail-value">Enter your full name → click START</div>
+        </div>
+      </div>
+
+      <div class="detail-item prize prize-wide">
+        <div class="detail-icon">💰</div>
+        <div class="detail-content">
+          <div class="detail-label">Cash Prizes</div>
+          <div class="detail-value prize-breakdown">
+            <span class="prize-tier">🥇 1st — $300</span>
+            <span class="prize-tier">🥈 2nd — $200</span>
+            <span class="prize-tier">🥉 3rd — $100</span>
+            <span class="prize-tier merit">⭐ 8 Merit — $50 each</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-item link-item">
+        <div class="detail-icon">🔗</div>
+        <a href="https://xul-amd.github.io/tetris/" class="detail-content">
+          <div class="detail-label">Play Now</div>
+          <div class="detail-value">xul-amd.github.io/tetris/</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW TO PLAY -->
+  <div class="how-section">
+    <div class="section-header">
+      <div class="section-line"></div>
+      <span class="section-label">How to Play</span>
+      <div class="section-line rev"></div>
+    </div>
+
+    <div class="how-grid">
+      <!-- Controls -->
+      <div class="how-col">
+        <div class="col-title">⌨ Keyboard</div>
+        <ul class="how-list">
+          <li><span class="key">← →</span> Move left / right</li>
+          <li><span class="key">↓</span> Soft drop</li>
+          <li><span class="key">R</span> Restart</li>
+        </ul>
+        <div class="col-title" style="margin-top:12px;">📱 Touch</div>
+        <ul class="how-list">
+          <li><span class="key">SWIPE ←→</span> Move</li>
+          <li><span class="key">SWIPE ↓</span> Soft drop</li>
+          <li><span class="key">HOLD 3s</span> Restart</li>
+        </ul>
+        <div class="goal-note">
+          🎯 <strong>Goal:</strong> Line up <strong>A – T – S</strong> in a straight line<br>
+          → horizontal &nbsp; ↓ vertical &nbsp; ↘↗ diagonal
+        </div>
+      </div>
+
+      <!-- Specials & Hazards -->
+      <div class="how-col">
+        <div class="col-title">✨ Specials &amp; Hazards</div>
+        <ul class="how-list">
+          <li>
+            <span class="sp-icon special-cyan">✱</span>
+            <span><span class="special-cyan">Wildcard</span> — acts as any letter</span>
+          </li>
+          <li>
+            <span class="sp-icon">🅑</span>
+            <span><strong>B Bomb</strong> — clears a 3×3 area</span>
+          </li>
+          <li>
+            <span class="sp-icon special-gold">✦</span>
+            <span><span class="special-gold">Mega Bomb</span> — clears entire row &amp; column</span>
+          </li>
+          <li>
+            <span class="sp-icon hazard">☠</span>
+            <span><span class="hazard">Junk/poison</span> letters block your setups</span>
+          </li>
+          <li>
+            <span class="sp-icon hazard">⬆</span>
+            <span><span class="hazard">Garbage rows rise</span> every few blocks — stay sharp!</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORING -->
+  <div class="score-section">
+    <div class="section-header">
+      <div class="section-line"></div>
+      <span class="section-label">Scoring</span>
+      <div class="section-line rev"></div>
+    </div>
+
+    <div class="score-grid">
+      <div class="score-card gold-card">
+        <span class="score-pts">+100</span>
+        <div class="score-label">A–T–S Triple</div>
+      </div>
+      <div class="score-card">
+        <span class="score-pts">+25</span>
+        <div class="score-label">Diagonal Triple</div>
+      </div>
+      <div class="score-card">
+        <span class="score-pts">+50</span>
+        <div class="score-label">Chain Step<br><small style="font-size:10px;color:var(--muted)">per triple</small></div>
+      </div>
+      <div class="score-card">
+        <span class="score-pts">+20</span>
+        <div class="score-label">B Bomb<br><small style="font-size:10px;color:var(--muted)">per block</small></div>
+      </div>
+      <div class="score-card gold-card">
+        <span class="score-pts">+150</span>
+        <div class="score-label">✦ Mega Bomb<br><small style="font-size:10px;color:var(--muted)">row + col</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER CTA -->
+  <div class="footer-cta">
+    <div class="cta-headline">Ready to stack, clear, and climb the leaderboard?</div>
+    <a class="play-btn" href="https://xul-amd.github.io/tetris/">👾 &nbsp;PLAY NOW &nbsp;→</a>
+    <div class="cta-note">
+      Enter your <span class="ntid-chip">FULL NAME</span> before starting — your best score is submitted automatically!
+    </div>
+  </div>
+
+</div><!-- end .page -->
+
 </body>
 </html>

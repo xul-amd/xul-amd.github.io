@@ -22,3 +22,7 @@ rad.json
 #Test results file
 TestResults.xml
 .cline_storage
+supabase
+node_modules
+atssemble-poster.jpg
+atssemble-poster.pdf
