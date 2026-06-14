@@ -278,17 +278,28 @@
       font-family: var(--pixel); font-size: 16px;
       color: var(--neon2); text-shadow: var(--glow-neon); margin-bottom: 14px;
     }
-    #gameover-overlay .go-stats { display: flex; justify-content: center; gap: 20px; margin-bottom: 14px; }
-    #gameover-overlay .go-stat { text-align: center; }
-    #gameover-overlay .go-stat-label {
-      font-family: var(--pixel); font-size: 7px; color: var(--muted);
+    #gameover-overlay .go-current-label {
+      font-family: var(--pixel); font-size: 8px; color: var(--muted);
       letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
     }
-    #gameover-overlay .go-stat-val {
-      font-family: var(--body); font-size: 24px; font-weight: 700;
+    #gameover-overlay .go-current-val {
+      font-family: var(--body); font-size: 36px; font-weight: 700;
       color: var(--gold); text-shadow: var(--glow-gold);
+      margin-bottom: 10px;
     }
-    #gameover-overlay .go-stat-val.rank { color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+    #gameover-overlay .go-sub-stats {
+      display: flex; justify-content: center; gap: 24px; margin-bottom: 14px;
+    }
+    #gameover-overlay .go-sub-stat { text-align: center; }
+    #gameover-overlay .go-sub-label {
+      font-family: var(--pixel); font-size: 6px; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px;
+    }
+    #gameover-overlay .go-sub-val {
+      font-family: var(--body); font-size: 18px; font-weight: 700;
+      color: var(--white);
+    }
+    #gameover-overlay .go-sub-val.rank { color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
     #gameover-overlay .go-status { font-size: 13px; margin-bottom: 12px; min-height: 18px; }
     #gameover-overlay .go-lb { text-align: left; margin-bottom: 14px; max-height: 200px; overflow-y: auto; }
     #gameover-overlay .go-lb-title {
@@ -388,13 +399,11 @@
   <div id="gameover-overlay">
     <div class="panel">
       <div class="go-title">GAME OVER</div>
-      <div class="go-stats">
-        <div class="go-stat"><div class="go-stat-label">Score</div><div class="go-stat-val" id="go-score">0</div></div>
-        <div class="go-stat"><div class="go-stat-label">Best Score</div><div class="go-stat-val" id="go-best">0</div></div>
-      </div>
-      <div class="go-stats" style="margin-top:-6px;">
-        <div class="go-stat"><div class="go-stat-label">Ranking</div><div class="go-stat-val rank" id="go-rank">…</div></div>
-        <div class="go-stat"><div class="go-stat-label">Best Ranking</div><div class="go-stat-val rank" id="go-best-rank">…</div></div>
+      <div class="go-current-label">Current Score</div>
+      <div class="go-current-val" id="go-score">0</div>
+      <div class="go-sub-stats">
+        <div class="go-sub-stat"><div class="go-sub-label">Your Best Score</div><div class="go-sub-val" id="go-best">…</div></div>
+        <div class="go-sub-stat"><div class="go-sub-label">Your Best Ranking</div><div class="go-sub-val rank" id="go-best-rank">…</div></div>
       </div>
       <div id="go-progress" style="display:none;margin-bottom:10px;">
         <div style="background:rgba(224,64,251,0.2);border-radius:6px;height:8px;overflow:hidden;">
@@ -543,7 +552,7 @@ startBtn.disabled = !playerName;
 var goOverlay = document.getElementById('gameover-overlay');
 var goScore = document.getElementById('go-score');
 var goBest = document.getElementById('go-best');
-var goRank = document.getElementById('go-rank');
+var goRank = null; // removed from UI — best ranking only
 var goStatus = document.getElementById('go-status');
 var goLb = document.getElementById('go-lb');
 var goPlayBtn = document.getElementById('go-play-btn');
@@ -590,7 +599,7 @@ class GameScene extends Phaser.Scene {
     this.softTimer = 0;
     this.cellObjs = Array.from({length:ROWS}, function(){ return Array(COLS).fill(null); });
     this.activeObj = null;
-    this.best = Number(localStorage.getItem('ats-best')||0);
+    this.best = 0; // set from DB in create() via fetchTopOnline
 
     this.add.rectangle(VIEW_W/2, VIEW_H/2, VIEW_W, VIEW_H, COLORS.panel).setDepth(0);
     this.add.rectangle(VIEW_W/2, MARGIN + UIH/2, GRID_W+4, UIH+4, COLORS.bg).setDepth(1);
@@ -607,17 +616,33 @@ class GameScene extends Phaser.Scene {
 
     this.add.text(MARGIN+8, MARGIN+4, 'ATS-Semble', {fontFamily:'"Press Start 2P", monospace', fontSize:FS(12), color:'#FFD600'}).setDepth(3);
     this.scoreText = this.add.text(MARGIN+8, MARGIN+FS(28), 'Score: 0', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(16), color:'#f0e6ff'}).setDepth(3);
-    this.bestText  = this.add.text(MARGIN+8, MARGIN+FS(50), 'Best: '+this.best, {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#a88fd4'}).setDepth(3);
-    this.topText   = this.add.text(MARGIN+8, MARGIN+FS(70), '#1: ...', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#00f5ff'}).setDepth(3);
+    this.bestText  = this.add.text(MARGIN+8, MARGIN+FS(50), 'Your Best: …', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#a88fd4'}).setDepth(3);
+    this.topText   = this.add.text(MARGIN+8, MARGIN+FS(70), '#1: …', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#00f5ff'}).setDepth(3);
+    // Fetch user's DB best and leaderboard #1 from the server
     var self = this;
-    fetchTopOnline(1, 'all').then(function(res){
+    fetchTopOnline(20, 'all').then(function(res){
       if (res.ok && res.rows.length > 0) {
         var top = res.rows[0];
         self.topText.setText('#1: ' + (top.name||'anon') + ' — ' + top.score);
+        // Find this player's best from the DB
+        var name = playerName || '';
+        for (var i = 0; i < res.rows.length; i++) {
+          if (res.rows[i].name === name) {
+            self.best = res.rows[i].score;
+            self.bestText.setText('Your Best: ' + self.best);
+            localStorage.setItem('ats-best', String(self.best));
+            break;
+          }
+        }
+        if (self.best === 0) self.bestText.setText('Your Best: 0');
       } else {
         self.topText.setText('#1: —');
+        self.bestText.setText('Your Best: 0');
       }
-    }).catch(function(){ self.topText.setText('#1: —'); });
+    }).catch(function(){
+      self.topText.setText('#1: —');
+      self.bestText.setText('Your Best: ' + self.best);
+    });
 
     var previewPad = Math.round(6*DPR);
     var previewW = 3*CELL + 2*previewPad;
@@ -716,8 +741,7 @@ class GameScene extends Phaser.Scene {
     this.scoreText.setText('Score: ' + this.engine.score);
     if (this.engine.score > this.best) {
       this.best = this.engine.score;
-      localStorage.setItem('ats-best', String(this.best));
-      this.bestText.setText('Best: ' + this.best);
+      this.bestText.setText('Your Best: ' + this.best);
     }
   }
 
@@ -784,9 +808,6 @@ class GameScene extends Phaser.Scene {
     this.ghost.clear();
 
     var finalScore = this.engine.score;
-    var best = Math.max(finalScore, Number(localStorage.getItem('ats-best')||0));
-    var isNewBest = finalScore >= best;
-    localStorage.setItem('ats-best', String(best));
 
     var goBestRank = document.getElementById('go-best-rank');
     var goProgress = document.getElementById('go-progress');
@@ -794,8 +815,8 @@ class GameScene extends Phaser.Scene {
     var goProgressText = document.getElementById('go-progress-text');
 
     goScore.textContent = finalScore;
-    goBest.textContent = best;
-    goRank.textContent = '…';
+    goBest.textContent = '…';
+    if (goRank) goRank.textContent = '…';
     goBestRank.textContent = '…';
     goStatus.textContent = '';
     goStatus.style.color = '';
@@ -806,57 +827,95 @@ class GameScene extends Phaser.Scene {
     var self = this;
     var name = playerName || '';
 
+    // Helper: update all stats from the authoritative leaderboard data
+    function updateFromLeaderboard(rows, submitOk) {
+      renderGoLeaderboard(rows, name);
+      sideLBRefresh();
+
+      if (name && rows.length > 0) {
+        // Best score = this player's entry in the deduplicated leaderboard (DB truth)
+        var dbBest = 0, bestRank = -1;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].name === name) {
+            dbBest = rows[i].score;
+            bestRank = i;
+            break;
+          }
+        }
+        // Fall back to finalScore if player isn't in top 20 yet
+        if (dbBest === 0) dbBest = finalScore;
+
+        goBest.textContent = dbBest;
+        localStorage.setItem('ats-best', String(dbBest));
+
+        // Current score ranking = how many players have a higher best + 1
+        var higher = 0;
+        for (var j = 0; j < rows.length; j++) {
+          if (rows[j].score > finalScore) higher++;
+        }
+        if (goRank) goRank.textContent = '#' + (higher + 1);
+        goBestRank.textContent = bestRank >= 0 ? '#' + (bestRank + 1) : '—';
+
+        // Status message based on DB best
+        if (submitOk) {
+          goStatus.textContent = finalScore >= dbBest ? 'New best submitted!' : 'Score submitted!';
+          goStatus.style.color = '#69f0ae';
+        }
+      } else {
+        goBest.textContent = finalScore;
+        if (goRank) goRank.textContent = '—';
+        goBestRank.textContent = '—';
+      }
+    }
+
     if (name && this.sessionId) {
       goProgress.style.display = 'block';
       goProgressBar.style.width = '10%';
-      goProgressText.textContent = 'Submitting score…';
+      goProgressText.textContent = 'Checking your best…';
 
-      submitRun(this.sessionId, this.seed, name, this.inputLog).then(function(r){
-        goProgressBar.style.width = '50%';
-        goProgressText.textContent = 'Loading leaderboard…';
+      var sessionId = this.sessionId;
+      var seed = this.seed;
+      var inputLog = this.inputLog;
 
-        if (r && r.ok) {
-          goStatus.textContent = isNewBest ? 'New best submitted!' : 'Score submitted!';
-          goStatus.style.color = '#69f0ae';
-          if (typeof r.score === 'number' && r.score > best) {
-            localStorage.setItem('ats-best', String(r.score));
-            goBest.textContent = r.score;
-          }
-        } else {
-          goStatus.textContent = 'Submit failed: ' + ((r && r.reason) || 'unknown');
-          goStatus.style.color = '#ff6b6b';
+      // First fetch leaderboard to find user's current DB best
+      fetchTopOnline(20, 'all').then(function(res){
+        goProgressBar.style.width = '30%';
+        var rows = (res.ok ? res.rows : []);
+        var dbBest = 0;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].name === name) { dbBest = rows[i].score; break; }
         }
 
-        fetchTopOnline(20, 'all').then(function(res){
+        // Only submit if this score beats the DB record
+        if (finalScore > dbBest) {
+          goProgressText.textContent = 'New best! Submitting…';
+          goProgressBar.style.width = '50%';
+          submitRun(sessionId, seed, name, inputLog).then(function(r){
+            goProgressBar.style.width = '80%';
+            goProgressText.textContent = 'Refreshing leaderboard…';
+            var submitOk = !!(r && r.ok);
+            if (!submitOk) {
+              goStatus.textContent = 'Submit failed: ' + ((r && r.reason) || 'unknown');
+              goStatus.style.color = '#ff6b6b';
+            }
+            // Re-fetch leaderboard to reflect the new score
+            fetchTopOnline(20, 'all').then(function(res2){
+              goProgressBar.style.width = '100%';
+              goProgressText.textContent = 'Done!';
+              setTimeout(function(){ goProgress.style.display = 'none'; }, 600);
+              updateFromLeaderboard((res2.ok ? res2.rows : []), submitOk);
+            }).catch(function(){ updateFromLeaderboard(rows, false); goProgress.style.display = 'none'; });
+          });
+        } else {
+          // Score not higher — skip submission, just show stats
           goProgressBar.style.width = '100%';
           goProgressText.textContent = 'Done!';
           setTimeout(function(){ goProgress.style.display = 'none'; }, 600);
-
-          var rows = (res.ok ? res.rows : []);
-          renderGoLeaderboard(rows, name);
-          sideLBRefresh();
-
-          if (name && rows.length > 0) {
-            // Find current score rank and best score rank
-            var curRank = -1, bestRank = -1;
-            for (var i = 0; i < rows.length; i++) {
-              if (rows[i].name === name) {
-                bestRank = i;
-                break;
-              }
-            }
-            // Current score rank = how many deduplicated players scored higher + 1
-            var higher = 0;
-            for (var j = 0; j < rows.length; j++) {
-              if (rows[j].score > finalScore) higher++;
-            }
-            curRank = higher;
-
-            goRank.textContent = '#' + (curRank + 1);
-            goBestRank.textContent = bestRank >= 0 ? '#' + (bestRank + 1) : '—';
-          }
-        }).catch(function(){ renderGoLeaderboard([], name); goProgress.style.display = 'none'; });
-      });
+          goStatus.textContent = 'Not a new best — score not submitted';
+          goStatus.style.color = '#a88fd4';
+          updateFromLeaderboard(rows, false);
+        }
+      }).catch(function(){ renderGoLeaderboard([], name); goProgress.style.display = 'none'; });
     } else if (!name) {
       goStatus.textContent = 'No name — score not submitted';
       goStatus.style.color = '#a88fd4';
@@ -877,9 +936,27 @@ class GameScene extends Phaser.Scene {
         for (var i = 0; i < rows.length; i++) {
           if (rows[i].name === myName) { myRow = i; break; }
         }
-        if (myRow >= 0) goRank.textContent = '#' + (myRow + 1);
+        if (myRow >= 0 && goRank) goRank.textContent = '#' + (myRow + 1);
       }
     }).catch(function(){ renderGoLeaderboard([], myName); });
+  }
+
+  refreshHudFromDB(){
+    var self = this;
+    fetchTopOnline(20, 'all').then(function(res){
+      if (res.ok && res.rows.length > 0) {
+        var top = res.rows[0];
+        self.topText.setText('#1: ' + (top.name||'anon') + ' — ' + top.score);
+        var name = playerName || '';
+        for (var i = 0; i < res.rows.length; i++) {
+          if (res.rows[i].name === name) {
+            self.best = res.rows[i].score;
+            self.bestText.setText('Your Best: ' + self.best);
+            break;
+          }
+        }
+      }
+    }).catch(function(){});
   }
 
   doRestart(){
@@ -889,6 +966,7 @@ class GameScene extends Phaser.Scene {
     if (this.activeObj) { this.activeObj.destroy(); this.activeObj=null; }
     this.ghost.clear();
     this.gameOver = false; this.started = false;
+    this.refreshHudFromDB();
     this.beginSession();
   }
 }
