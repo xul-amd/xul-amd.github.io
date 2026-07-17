@@ -1,0 +1,41 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '17 3 * * *'   # daily at 03:17 UTC
+  workflow_dispatch:        # manual trigger for testing
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Insert dummy score
+        run: |
+          RESP=$(curl -s -w '\n%{http_code}' \
+            -X POST "${{ vars.SUPABASE_URL }}/rest/v1/scores" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d '{"name":"__keepalive__","score":0}')
+          HTTP=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | sed '$d')
+          echo "Insert HTTP $HTTP"
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
+            echo "::error::Insert failed ($HTTP): $BODY"; exit 1
+          fi
+          # Extract the inserted row's id
+          ROW_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())[0]['id'])")
+          echo "ROW_ID=$ROW_ID" >> "$GITHUB_ENV"
+
+      - name: Delete dummy score
+        run: |
+          HTTP=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X DELETE "${{ vars.SUPABASE_URL }}/rest/v1/scores?id=eq.${{ env.ROW_ID }}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}")
+          echo "Delete HTTP $HTTP"
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
+            echo "::error::Delete failed ($HTTP)"; exit 1
+          fi
+          echo "Keepalive done — dummy row inserted and removed"
