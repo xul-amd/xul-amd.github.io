@@ -15,16 +15,18 @@ const browser = await puppeteer.launch({
 
 const page = await browser.newPage();
 
-// A4 at 150dpi: 1240 x 1754 px
-await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 2 });
+// Render at page max-width (860px CSS), 2x scale → 1720px image
+const CSS_W = 860;
+const SCALE = 2;
+await page.setViewport({ width: CSS_W, height: 1200, deviceScaleFactor: SCALE });
 await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 });
 
 // Wait for Google Fonts to load (or timeout gracefully)
 await new Promise(r => setTimeout(r, 2000));
 
-// Get full page height
+// Get full page height and re-set viewport to capture everything
 const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
-await page.setViewport({ width: 800, height: bodyHeight, deviceScaleFactor: 2 });
+await page.setViewport({ width: CSS_W, height: bodyHeight, deviceScaleFactor: SCALE });
 await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 });
 await new Promise(r => setTimeout(r, 2000));
 
@@ -38,11 +40,13 @@ await page.screenshot({
 });
 console.log('JPG saved:', jpgPath);
 
-// --- PDF export ---
+// --- PDF export (match the rendered poster size, no reflow) ---
 const pdfPath = path.join(__dirname, 'atssemble-poster.pdf');
+const pdfHeight = await page.evaluate(() => document.body.scrollHeight);
 await page.pdf({
   path: pdfPath,
-  format: 'A4',
+  width: `${CSS_W}px`,
+  height: `${pdfHeight}px`,
   printBackground: true,
   margin: { top: '0', right: '0', bottom: '0', left: '0' }
 });

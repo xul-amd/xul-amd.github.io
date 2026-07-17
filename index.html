@@ -81,7 +81,7 @@ body::after {
 /* === PAGE CONTAINER === */
 .page {
   width: 100%;
-  max-width: 800px;
+  max-width: 860px;
   position: relative;
   z-index: 1;
 }
@@ -116,7 +116,7 @@ body::after {
 /* === HEADER === */
 .header {
   background: linear-gradient(135deg, #1a0d3d 0%, #2D1B69 50%, #1a0d3d 100%);
-  padding: 36px 32px 28px;
+  padding: 40px 36px 32px;
   text-align: center;
   border: 3px solid var(--neon);
   border-bottom: none;
@@ -153,8 +153,8 @@ body::after {
 
 .game-title {
   font-family: var(--pixel);
-  font-size: clamp(22px, 5vw, 36px);
-  letter-spacing: 4px;
+  font-size: clamp(24px, 5vw, 40px);
+  letter-spacing: 5px;
   line-height: 1.3;
   color: var(--gold);
   text-shadow: var(--glow-gold), 3px 3px 0 #b8960a;
@@ -177,18 +177,18 @@ body::after {
 
 .tagline {
   font-family: var(--pixel);
-  font-size: clamp(7px, 1.5vw, 10px);
+  font-size: clamp(8px, 1.5vw, 11px);
   color: var(--muted);
-  letter-spacing: 3px;
-  margin-top: 10px;
+  letter-spacing: 4px;
+  margin-top: 12px;
   text-transform: uppercase;
 }
 
 .subtagline {
   font-family: var(--body);
-  font-size: clamp(16px, 3vw, 22px);
+  font-size: clamp(18px, 3vw, 24px);
   font-weight: 700;
-  letter-spacing: 6px;
+  letter-spacing: 7px;
   color: var(--neon2);
   text-shadow: var(--glow-neon);
   margin-top: 8px;
@@ -199,12 +199,12 @@ body::after {
 .block-row {
   display: flex;
   justify-content: center;
-  gap: 4px;
-  margin-top: 16px;
+  gap: 5px;
+  margin-top: 18px;
 }
 
 .blk {
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   border: 2px solid rgba(255,255,255,0.3);
   position: relative;
 }
@@ -229,28 +229,14 @@ body::after {
   border: 2px solid var(--neon);
   border-top: none;
   border-bottom: none;
-  padding: 20px 32px;
+  padding: 22px 36px;
   position: relative;
 }
 
-.callout::before {
-  content: '▶ ATS BROADCAST ◀';
-  font-family: var(--pixel);
-  font-size: 7px;
-  color: var(--neon);
-  text-shadow: var(--glow-neon);
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg);
-  padding: 0 12px;
-  white-space: nowrap;
-}
 
 .callout p {
   font-family: var(--body);
-  font-size: clamp(14px, 2.2vw, 17px);
+  font-size: clamp(15px, 2.5vw, 19px);
   font-weight: 500;
   line-height: 1.65;
   color: var(--white);
@@ -265,7 +251,7 @@ body::after {
 /* === SECTION LABEL === */
 .section-label {
   font-family: var(--pixel);
-  font-size: clamp(8px, 1.8vw, 11px);
+  font-size: clamp(9px, 2vw, 12px);
   color: var(--gold);
   text-shadow: var(--glow-gold);
   letter-spacing: 3px;
@@ -278,7 +264,7 @@ body::after {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .section-line {
@@ -298,13 +284,13 @@ body::after {
   border: 2px solid var(--neon);
   border-top: none;
   border-bottom: none;
-  padding: 24px 32px;
+  padding: 26px 36px;
 }
 
 .details-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px 24px;
+  gap: 14px 28px;
 }
 
 .detail-item {
@@ -314,7 +300,7 @@ body::after {
   background: rgba(224,64,251,0.06);
   border: 1px solid rgba(224,64,251,0.2);
   border-radius: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   position: relative;
   overflow: hidden;
 }
@@ -329,7 +315,7 @@ body::after {
 }
 
 .detail-icon {
-  font-size: 20px;
+  font-size: 22px;
   flex-shrink: 0;
   line-height: 1;
   margin-top: 2px;
@@ -338,7 +324,7 @@ body::after {
 .detail-content { display: block; }
 .detail-label {
   font-family: var(--pixel);
-  font-size: 7px;
+  font-size: 8px;
   color: var(--muted);
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -346,7 +332,7 @@ body::after {
 }
 .detail-value {
   font-family: var(--body);
-  font-size: clamp(13px, 2vw, 15px);
+  font-size: clamp(14px, 2.2vw, 17px);
   font-weight: 600;
   color: var(--white);
   line-height: 1.3;
@@ -363,7 +349,7 @@ body::after {
 
 .prize-breakdown {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -371,9 +357,9 @@ body::after {
 .prize-tier {
   background: rgba(255,214,0,0.1);
   border: 1px solid rgba(255,214,0,0.3);
-  padding: 3px 10px;
+  padding: 4px 12px;
   font-family: var(--body);
-  font-size: clamp(12px, 1.8vw, 14px);
+  font-size: clamp(13px, 2vw, 16px);
   font-weight: 700;
   color: var(--gold);
   text-shadow: var(--glow-gold);
@@ -387,22 +373,36 @@ body::after {
   text-shadow: var(--glow-neon);
 }
 
-.detail-item.link-item .detail-value {
-  color: var(--gold);
-  text-shadow: var(--glow-gold);
-  font-size: clamp(13px, 2vw, 15px);
-  font-weight: 600;
+
+/* === PLAY NOW BANNER === */
+.play-now-section {
+  background: linear-gradient(135deg, rgba(255,214,0,0.12), rgba(45,27,105,0.9));
+  border: 2px solid var(--gold);
+  border-top: none;
+  border-bottom: none;
+  padding: 28px 36px;
+  text-align: center;
 }
 
-.detail-item.link-item a {
-  display: block;
-  color: inherit;
+.play-btn-large {
+  display: inline-block;
+  font-family: var(--pixel);
+  font-size: clamp(11px, 2.5vw, 15px);
+  color: var(--bg);
+  background: var(--gold);
+  padding: 16px 36px;
   text-decoration: none;
+  letter-spacing: 3px;
+  box-shadow: var(--glow-gold), 4px 4px 0 #b8960a;
+  transition: transform 0.1s, box-shadow 0.1s;
+  border: none;
+  cursor: pointer;
+  animation: btnPulse 2.5s ease-in-out infinite;
 }
 
-.detail-item.link-item a .detail-label,
-.detail-item.link-item a .detail-value {
-  pointer-events: none;
+.play-btn-large:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 0 0 30px #FFD600, 0 0 60px #FFD600, 6px 6px 0 #b8960a;
 }
 
 /* === HOW TO PLAY === */
@@ -411,24 +411,24 @@ body::after {
   border: 2px solid var(--neon);
   border-top: none;
   border-bottom: none;
-  padding: 24px 32px;
+  padding: 26px 36px;
 }
 
 .how-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 24px;
 }
 
 .how-col {}
 
 .col-title {
   font-family: var(--pixel);
-  font-size: clamp(7px, 1.4vw, 9px);
+  font-size: clamp(8px, 1.6vw, 10px);
   color: var(--neon);
   text-shadow: var(--glow-neon);
   letter-spacing: 2px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(224,64,251,0.3);
 }
@@ -437,12 +437,12 @@ body::after {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .how-list li {
   font-family: var(--body);
-  font-size: clamp(13px, 2vw, 15px);
+  font-size: clamp(14px, 2.2vw, 17px);
   font-weight: 500;
   color: var(--white);
   display: flex;
@@ -453,11 +453,11 @@ body::after {
 
 .how-list li .key {
   font-family: var(--pixel);
-  font-size: 8px;
+  font-size: 9px;
   background: rgba(224,64,251,0.15);
   border: 1px solid var(--neon);
   color: var(--neon);
-  padding: 2px 5px;
+  padding: 2px 6px;
   flex-shrink: 0;
   margin-top: 1px;
   box-shadow: 0 0 6px rgba(224,64,251,0.3);
@@ -465,21 +465,21 @@ body::after {
 }
 
 .how-list li .sp-icon {
-  font-size: 14px;
+  font-size: 16px;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .goal-note {
-  margin-top: 10px;
+  margin-top: 12px;
   background: rgba(255,214,0,0.08);
   border: 1px solid rgba(255,214,0,0.3);
   border-left: 3px solid var(--gold);
-  padding: 8px 10px;
+  padding: 10px 12px;
   font-family: var(--body);
-  font-size: clamp(12px, 1.8vw, 14px);
+  font-size: clamp(13px, 2vw, 16px);
   color: var(--gold2);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .hazard { color: #ff6b6b; }
@@ -492,20 +492,19 @@ body::after {
   background: linear-gradient(135deg, rgba(45,27,105,0.9), rgba(26,13,61,0.95));
   border: 2px solid var(--neon);
   border-top: none;
-  border-bottom: none;
-  padding: 24px 32px;
+  padding: 26px 36px;
 }
 
 .score-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .score-card {
   background: rgba(224,64,251,0.06);
   border: 1px solid rgba(224,64,251,0.25);
-  padding: 12px 10px;
+  padding: 14px 10px;
   text-align: center;
   position: relative;
   transition: border-color 0.2s;
@@ -531,7 +530,7 @@ body::after {
 
 .score-pts {
   font-family: var(--pixel);
-  font-size: clamp(11px, 2vw, 14px);
+  font-size: clamp(12px, 2.2vw, 16px);
   color: var(--gold);
   text-shadow: var(--glow-gold);
   display: block;
@@ -540,62 +539,20 @@ body::after {
 
 .score-label {
   font-family: var(--body);
-  font-size: clamp(11px, 1.6vw, 13px);
+  font-size: clamp(12px, 1.8vw, 15px);
   font-weight: 600;
   color: var(--muted);
   line-height: 1.3;
 }
 
-/* === FOOTER CTA === */
-.footer-cta {
-  background: linear-gradient(135deg, #2D1B69 0%, #1a0d3d 50%, #2D1B69 100%);
-  border: 3px solid var(--gold);
-  border-top: none;
-  box-shadow: var(--glow-gold), inset 0 0 30px rgba(255,214,0,0.03);
-  padding: 28px 32px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.footer-cta::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 8px,
-    rgba(255,214,0,0.015) 8px,
-    rgba(255,214,0,0.015) 9px
-  );
-  pointer-events: none;
-}
-
+/* === CTA elements (used in play-now-section) === */
 .cta-headline {
   font-family: var(--pixel);
-  font-size: clamp(9px, 2vw, 13px);
+  font-size: clamp(10px, 2vw, 14px);
   color: var(--white);
   letter-spacing: 1px;
   line-height: 2;
   margin-bottom: 18px;
-}
-
-.play-btn {
-  display: inline-block;
-  font-family: var(--pixel);
-  font-size: clamp(9px, 2vw, 13px);
-  color: var(--bg);
-  background: var(--gold);
-  padding: 14px 28px;
-  text-decoration: none;
-  letter-spacing: 2px;
-  box-shadow: var(--glow-gold), 4px 4px 0 #b8960a;
-  transition: transform 0.1s, box-shadow 0.1s;
-  position: relative;
-  border: none;
-  cursor: pointer;
-  animation: btnPulse 2.5s ease-in-out infinite;
 }
 
 @keyframes btnPulse {
@@ -603,14 +560,9 @@ body::after {
   50% { box-shadow: 0 0 20px #FFD600, 0 0 40px #FFD600, 0 0 60px #FFD600, 4px 4px 0 #b8960a; }
 }
 
-.play-btn:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 0 0 30px #FFD600, 0 0 60px #FFD600, 6px 6px 0 #b8960a;
-}
-
 .cta-note {
   font-family: var(--body);
-  font-size: clamp(11px, 1.6vw, 13px);
+  font-size: clamp(12px, 2vw, 15px);
   color: var(--muted);
   margin-top: 16px;
   line-height: 1.5;
@@ -629,7 +581,7 @@ body::after {
   color: var(--cyan);
   padding: 2px 8px;
   font-family: var(--pixel);
-  font-size: 8px;
+  font-size: 9px;
   box-shadow: var(--glow-cyan);
 }
 
@@ -654,13 +606,13 @@ body::after {
 
   .page { max-width: 100%; }
 
-  .header, .callout, .details-section, .how-section, .score-section, .footer-cta {
+  .header, .callout, .details-section, .play-now-section, .how-section, .score-section {
     background: #fff !important;
     box-shadow: none !important;
     border-color: #333 !important;
   }
 
-  .game-title, .section-label, .col-title, .cta-headline, .play-btn,
+  .game-title, .section-label, .col-title, .cta-headline, .play-btn-large,
   .score-pts, .detail-label, .detail-value, .how-list li {
     color: #111 !important;
     text-shadow: none !important;
@@ -671,12 +623,13 @@ body::after {
   .callout p, .cta-note { color: #222 !important; }
   .detail-value.prize-val, .score-pts { color: #000 !important; font-weight: 900 !important; }
 
-  .play-btn {
+  .play-btn-large {
     background: #111 !important;
     color: #fff !important;
     box-shadow: none !important;
     border: 2px solid #111 !important;
   }
+
 
   .blk, .corner-decor, .section-line, .block-row { display: none !important; }
 
@@ -686,13 +639,26 @@ body::after {
 
 /* === RESPONSIVE === */
 @media (max-width: 600px) {
+  .header { padding: 28px 16px 20px; }
+
+  .callout { padding: 18px 16px; }
+
+  .details-section, .play-now-section, .how-section, .score-section {
+    padding: 20px 16px;
+  }
+
   .details-grid { grid-template-columns: 1fr; }
   .how-grid { grid-template-columns: 1fr; }
   .score-grid { grid-template-columns: repeat(3, 1fr); }
-  .header, .callout, .details-section, .how-section, .score-section, .footer-cta {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
+
+  .blk { width: 16px; height: 16px; }
+  .block-row { gap: 3px; }
+  .corner-decor { width: 16px; height: 16px; }
+}
+
+@media (max-width: 400px) {
+  .score-grid { grid-template-columns: repeat(2, 1fr); }
+  .prize-breakdown { flex-direction: column; gap: 6px; }
 }
 </style>
 </head>
@@ -736,7 +702,7 @@ body::after {
   <!-- CALLOUT -->
   <div class="callout">
     <p>
-      Hey <strong>AMDers</strong> — Ready to stack, swap, and strategize?
+      Hey <strong>AMDers</strong>, ready to stack, swap, and strategize?
       ATS is bringing you a brand new challenge with <strong>ATS-Semble</strong>,
       our Tetris-inspired puzzle game! Play throughout the event period,
       climb the leaderboard, and <strong>win cash prizes up to $300!</strong>
@@ -797,13 +763,15 @@ body::after {
         </div>
       </div>
 
-      <div class="detail-item link-item">
-        <div class="detail-icon">🔗</div>
-        <a href="https://xul-amd.github.io/tetris/" class="detail-content">
-          <div class="detail-label">Play Now</div>
-          <div class="detail-value">xul-amd.github.io/tetris/</div>
-        </a>
-      </div>
+    </div>
+  </div>
+
+  <!-- PLAY NOW -->
+  <div class="play-now-section">
+    <div class="cta-headline">Ready to stack, clear, and climb the leaderboard?</div>
+    <a class="play-btn-large" href="https://xul-amd.github.io/tetris/">👾 &nbsp;PLAY NOW &nbsp;→</a>
+    <div class="cta-note">
+      Enter your <span class="ntid-chip">FULL NAME</span> before starting — your best score is submitted automatically!
     </div>
   </div>
 
@@ -816,19 +784,13 @@ body::after {
     </div>
 
     <div class="how-grid">
-      <!-- Controls -->
+      <!-- Controls (consolidated) -->
       <div class="how-col">
-        <div class="col-title">⌨ Keyboard</div>
+        <div class="col-title">⌨ Keyboard &amp; 📱 Touch Controls</div>
         <ul class="how-list">
-          <li><span class="key">← →</span> Move left / right</li>
-          <li><span class="key">↓</span> Soft drop</li>
-          <li><span class="key">R</span> Restart</li>
-        </ul>
-        <div class="col-title" style="margin-top:12px;">📱 Touch</div>
-        <ul class="how-list">
-          <li><span class="key">SWIPE ←→</span> Move</li>
-          <li><span class="key">SWIPE ↓</span> Soft drop</li>
-          <li><span class="key">HOLD 3s</span> Restart</li>
+          <li><span class="key">← →</span> / <span class="key">SWIPE</span> Move left / right</li>
+          <li><span class="key">↓</span> / <span class="key">SWIPE ↓</span> Soft drop</li>
+          <li><span class="key">R</span> / <span class="key">HOLD 3s</span> Restart</li>
         </ul>
         <div class="goal-note">
           🎯 <strong>Goal:</strong> Line up <strong>A – T – S</strong> in a straight line<br>
@@ -884,27 +846,19 @@ body::after {
       </div>
       <div class="score-card">
         <span class="score-pts">+50</span>
-        <div class="score-label">Chain Step<br><small style="font-size:10px;color:var(--muted)">per triple</small></div>
+        <div class="score-label">Chain Step<br><small style="font-size:11px;color:var(--muted)">per triple</small></div>
       </div>
       <div class="score-card">
         <span class="score-pts">+20</span>
-        <div class="score-label">B Bomb<br><small style="font-size:10px;color:var(--muted)">per block</small></div>
+        <div class="score-label">B Bomb<br><small style="font-size:11px;color:var(--muted)">per block</small></div>
       </div>
       <div class="score-card gold-card">
         <span class="score-pts">+150</span>
-        <div class="score-label">✦ Mega Bomb<br><small style="font-size:10px;color:var(--muted)">row + col</small></div>
+        <div class="score-label">✦ Mega Bomb<br><small style="font-size:11px;color:var(--muted)">row + col</small></div>
       </div>
     </div>
   </div>
 
-  <!-- FOOTER CTA -->
-  <div class="footer-cta">
-    <div class="cta-headline">Ready to stack, clear, and climb the leaderboard?</div>
-    <a class="play-btn" href="https://xul-amd.github.io/tetris/">👾 &nbsp;PLAY NOW &nbsp;→</a>
-    <div class="cta-note">
-      Enter your <span class="ntid-chip">FULL NAME</span> before starting — your best score is submitted automatically!
-    </div>
-  </div>
 
 </div><!-- end .page -->
 
