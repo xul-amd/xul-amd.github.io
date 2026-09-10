@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="tetris.ico" type="image/x-icon">
+<title>ATS-Semble — TV Slide</title>
+<style>
+/* Canvas is 1280x720 (the source EDM deck's coordinate system).
+   Export at deviceScaleFactor 1.5 for a 1920x1080 TV frame. */
+:root {
+  --bg:      #0B1020;
+  --orange:  #F04B23;
+  --amber:   #F5A623;
+  --green:   #68D391;
+  --white:   #FFFFFF;
+  --body:    #DDE3EE;
+  --muted:   #9CA7BC;
+  --card:    #151D31;
+  --card-br: #303A55;
+  --panel:   #11182A;
+  --panel-br:#29324A;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 1280px; height: 720px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--white);
+  font-family: "Segoe UI", "Aptos", Calibri, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.slide { position: relative; width: 1280px; height: 720px; }
+.slide > * { position: absolute; }
+
+/* === LEFT: HEADER === */
+.eyebrow {
+  left: 56px; top: 63px;
+  font-size: 42.7px; font-weight: 700; line-height: 1;
+  color: var(--orange);
+}
+
+.title {
+  left: 53px; top: 108px; width: 710px;
+  font-size: 56px; font-weight: 700; line-height: 1;
+  color: var(--white);
+}
+/* ATS-Semble letter colours, harmonised with the EDM palette */
+.title .l-a    { color: #00F5FF; }
+.title .l-t    { color: var(--orange); }
+.title .l-s    { color: var(--green); }
+.title .l-rest { color: var(--amber); }
+
+.tagline {
+  left: 56px; top: 233px; width: 653px;
+  font-size: 24px; font-weight: 700; letter-spacing: 0.8px;
+  color: var(--amber);
+}
+
+.intro {
+  left: 56px; top: 282px; width: 686px;
+  font-size: 16px; font-weight: 400; line-height: 1.5;
+  color: var(--body);
+}
+
+/* === STAT CARDS === */
+.card {
+  top: 386px; height: 91px;
+  background: var(--card);
+  border: 1px solid var(--card-br);
+  border-radius: 8px;
+  padding: 14px 0 0 17px;
+  overflow: hidden;
+}
+.card::before {
+  content: ''; position: absolute; left: 0; top: 0;
+  width: 7px; height: 100%;
+}
+.card.c1 { left: 56px;  width: 216px; }
+.card.c2 { left: 286px; width: 204px; }
+.card.c3 { left: 504px; width: 238px; }
+.card.c1::before { background: var(--orange); }
+.card.c2::before { background: var(--amber); }
+.card.c3::before { background: var(--green); }
+
+.card .k {
+  font-size: 16px; font-weight: 700; letter-spacing: 0.53px;
+  color: var(--muted); text-transform: uppercase;
+}
+.card .v {
+  margin-top: 6px;
+  font-size: 21.3px; font-weight: 700; line-height: 1.15;
+  color: var(--white);
+}
+
+/* === HOW IT WORKS PANEL === */
+.panel {
+  left: 56px; top: 503px; width: 686px; height: 138px;
+  background: var(--panel);
+  border: 1px solid var(--panel-br);
+  border-radius: 8px;
+}
+.panel .h {
+  position: absolute; left: 9px; top: 12px;
+  font-size: 18.7px; font-weight: 700; letter-spacing: 0.4px;
+  color: var(--amber);
+}
+.steps {
+  position: absolute; left: 9px; top: 42px; width: 663px;
+  display: flex; gap: 20px;
+  font-size: 18.7px; font-weight: 700; line-height: 1.25;
+  color: var(--white);
+}
+.steps .n { color: var(--orange); margin-right: 6px; }
+.steps > div { flex: 1; }
+
+.panel .sk {
+  position: absolute; left: 9px; top: 97px;
+  font-size: 16px; font-weight: 700; letter-spacing: 0.4px;
+  color: var(--muted);
+}
+.panel .sv {
+  position: absolute; left: 86px; top: 97px; width: 587px;
+  font-size: 16px; font-weight: 700; line-height: 1.35;
+  color: var(--body);
+}
+.panel .sv b { color: var(--amber); font-weight: 700; }
+
+/* === RIGHT: QR / CTA === */
+.ready {
+  left: 854px; top: 108px; width: 341px;
+  font-size: 29.3px; font-weight: 700;
+  color: var(--white);
+}
+.scan {
+  left: 856px; top: 145px; width: 317px;
+  font-size: 16px; font-weight: 400;
+  color: var(--body);
+}
+
+.qr {
+  left: 856px; top: 183px;
+  width: 336px; height: 336px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  line-height: 0;
+}
+.qr img { width: 100%; height: 100%; display: block; }
+
+.prizes {
+  left: 856px; top: 526px; width: 336px;
+  font-size: 20px; font-weight: 700;
+  color: var(--orange);
+  text-align: center;
+}
+.eligible {
+  left: 818px; top: 556px; width: 413px;
+  font-size: 16px; font-weight: 400; line-height: 1.35;
+  color: var(--body);
+  text-align: center;
+}
+
+.btn {
+  left: 891px; top: 606px; width: 267px; height: 50px;
+  background: var(--orange);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 21.3px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--white);
+}
+.url {
+  left: 818px; top: 665px; width: 413px;
+  font-size: 15px; font-weight: 700; letter-spacing: 0.2px;
+  color: var(--muted);
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  <!-- LEFT COLUMN -->
+  <div class="eyebrow">ATS 2026</div>
+  <div class="title"><span class="l-a">A</span><span class="l-t">T</span><span class="l-s">S</span><span class="l-rest">-SEMBLE</span><br>PUZZLE CHALLENGE</div>
+  <div class="tagline">STACK. CLEAR. COMPETE.</div>
+  <div class="intro">
+    Join colleagues across AMD in ATS-Semble, our Tetris-inspired puzzle game.
+    Drop the blocks, line up A&ndash;T&ndash;S, and climb the live leaderboard across
+    two weeks of friendly rivalry. Play as often as you like &mdash; your best
+    score is the one that counts.
+  </div>
+
+  <div class="card c1">
+    <div class="k">Event Period</div>
+    <div class="v">12&ndash;26 Oct 2026</div>
+  </div>
+  <div class="card c2">
+    <div class="k">Format</div>
+    <div class="v">Play anytime</div>
+  </div>
+  <div class="card c3">
+    <div class="k">Platform</div>
+    <div class="v">Any browser</div>
+  </div>
+
+  <div class="panel">
+    <div class="h">HOW IT WORKS</div>
+    <div class="steps">
+      <div><span class="n">1</span>Scan the QR and enter your full name</div>
+      <div><span class="n">2</span>Line up A&ndash;T&ndash;S in a straight line</div>
+      <div><span class="n">3</span>Climb the leaderboard</div>
+    </div>
+    <div class="sk">SCORING</div>
+    <div class="sv">
+      A&ndash;T&ndash;S triple <b>+100</b>&nbsp; |&nbsp; Diagonal <b>+25</b>&nbsp; |&nbsp;
+      Chain step <b>+50</b>&nbsp; |&nbsp; Bombs <b>+20</b> / <b>+150</b>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="ready">READY TO PLAY?</div>
+  <div class="scan">Scan to play &mdash; no install, no sign-up</div>
+  <div class="qr"><img src="qr-tetris.svg" alt="QR code to play ATS-Semble"></div>
+
+  <div class="prizes">Attractive prizes to be won!</div>
+  <div class="eligible">Open to all AMDers. 1st, 2nd &amp; 3rd place<br>plus 8 Merit Winners.</div>
+  <div class="btn">PLAY NOW</div>
+  <div class="url">xul-amd.github.io/tetris/</div>
+
+</div>
+
+</body>
+</html>

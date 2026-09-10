@@ -26,3 +26,10 @@ supabase
 node_modules
 atssemble-poster.jpg
 atssemble-poster.pdf
+atssemble-slide.jpg
+atssemble-slide.pdf
+
+# AMD-internal source deck, the deck built from it, and the build script that
+# embeds its copy. This repo is public — keep these local only.
+*.pptx
+build-pptx.py
