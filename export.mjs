@@ -4,7 +4,11 @@ import path from 'path';
 import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const htmlPath = path.join(__dirname, 'index.html');
+
+// export.mjs [source.html] [cssWidth] [scale] [outName]  — defaults render the poster
+const [src = 'index.html', width = 860, scale = 2, out = 'atssemble-poster'] = process.argv.slice(2);
+
+const htmlPath = path.join(__dirname, src);
 const fileUrl = 'file:///' + htmlPath.replace(/\\/g, '/');
 
 const browser = await puppeteer.launch({
@@ -15,9 +19,10 @@ const browser = await puppeteer.launch({
 
 const page = await browser.newPage();
 
-// Render at page max-width (860px CSS), 2x scale → 1720px image
-const CSS_W = 860;
-const SCALE = 2;
+// Render at the page's CSS width and scale it up (poster: 860x2 → 1720px wide;
+// slide: 1280x1.5 → 1920x1080). Body height drives the capture height.
+const CSS_W = Number(width);
+const SCALE = Number(scale);
 await page.setViewport({ width: CSS_W, height: 1200, deviceScaleFactor: SCALE });
 await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 });
 
@@ -31,7 +36,7 @@ await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 });
 await new Promise(r => setTimeout(r, 2000));
 
 // --- JPG export ---
-const jpgPath = path.join(__dirname, 'atssemble-poster.jpg');
+const jpgPath = path.join(__dirname, `${out}.jpg`);
 await page.screenshot({
   path: jpgPath,
   type: 'jpeg',
@@ -41,7 +46,7 @@ await page.screenshot({
 console.log('JPG saved:', jpgPath);
 
 // --- PDF export (match the rendered poster size, no reflow) ---
-const pdfPath = path.join(__dirname, 'atssemble-poster.pdf');
+const pdfPath = path.join(__dirname, `${out}.pdf`);
 const pdfHeight = await page.evaluate(() => document.body.scrollHeight);
 await page.pdf({
   path: pdfPath,
