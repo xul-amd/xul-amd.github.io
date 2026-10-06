@@ -22,7 +22,8 @@ rad.json
 #Test results file
 TestResults.xml
 .cline_storage
-supabase
+# Supabase CLI link state (org id, DB pooler host) — functions/SQL/README are tracked
+supabase/.temp/
 node_modules
 atssemble-poster.jpg
 atssemble-poster.pdf
