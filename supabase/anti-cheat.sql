@@ -31,6 +31,8 @@ create policy scores_anon_select on public.scores
 
 revoke insert, update, delete on public.scores from anon, authenticated;
 grant  select on public.scores to anon;
+-- Supabase's defaults also grant TRUNCATE/REFERENCES/TRIGGER; the app only needs SELECT.
+revoke truncate, references, trigger on public.scores from anon, authenticated;
 
 -- 3) Remove the old exploitable RPC the browser used to call directly.
 --    (Drop every signature it may have been created with.)
