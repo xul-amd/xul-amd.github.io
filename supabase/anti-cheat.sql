@@ -36,9 +36,19 @@ revoke truncate, references, trigger on public.scores from anon, authenticated;
 
 -- 3) Remove the old exploitable RPC the browser used to call directly.
 --    (Drop every signature it may have been created with.)
-drop function if exists public.submit_score(text, int, int, int);
-drop function if exists public.submit_score(text, integer, integer, integer);
-drop function if exists public.submit_score(p_name text, p_score int, p_lock_count int, p_elapsed_seconds int);
+do $$
+declare f record;
+begin
+  -- Drop EVERY overload. Matching one signature isn't enough: the live one took
+  -- (text, integer, integer, double precision) and a typed DROP silently missed it,
+  -- leaving a SECURITY DEFINER RPC that let anyone insert any score.
+  for f in select p.oid::regprocedure as sig from pg_proc p
+           join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = 'submit_score'
+  loop
+    execute 'drop function ' || f.sig;
+  end loop;
+end $$;
 
 -- 4) Optional hygiene: purge stale/used sessions periodically (manual or cron).
 -- delete from public.sessions where created_at < now() - interval '1 day';
