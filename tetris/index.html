@@ -518,19 +518,23 @@ async function fetchTopOnline(limit, period){
   limit = limit || 20; period = period || 'all';
   if(!supa) return { ok:false, rows:[] };
   try{
-    var query = supa.from('scores').select('name,score,created_at');
+    var query = supa.from('scores').select('name,name_key,score,created_at');
     var resp = await query.order('score',{ascending:false}).limit(limit * 3);
     if (resp.error) return { ok:false, rows:[] };
     return { ok:true, rows: deduplicateScoresByName(resp.data||[]).slice(0, limit) };
   } catch(e){ return { ok:false, rows:[] }; }
 }
+// Same key as scores.name_key in the DB: "Chou, Joe" and "chou joe" are one player.
+function nameKey(s){ return String(s || '').toLowerCase().replace(/[\x00-\x2F\x3A-\x40\x5B-\x60\x7B-\x7F]/g, ''); }
+function rowKey(row){ return row.name_key || nameKey(row.name) || ('raw:' + (row.name || 'anon')); }
+function isMe(row, n){ var k = nameKey(n); return !!k && rowKey(row) === k; }
 function deduplicateScoresByName(rows){
   if(!rows || rows.length === 0) return rows;
   var nameMap = new Map();
   rows.forEach(function(row){
-    var name = row.name || 'anon';
-    var existing = nameMap.get(name);
-    if (!existing || row.score > existing.score) nameMap.set(name, row);
+    var key = rowKey(row);
+    var existing = nameMap.get(key);
+    if (!existing || row.score > existing.score) nameMap.set(key, row);
   });
   return Array.from(nameMap.values()).sort(function(a, b){ return b.score - a.score; });
 }
@@ -554,7 +558,7 @@ function sideLBRender(rows){
     sideLBList.innerHTML='<div style="opacity:.7">No scores yet</div>'; return;
   }
   var html = rows.slice(0,20).map(function(r,i){
-    var mine = myName && r.name === myName;
+    var mine = myName && isMe(r, myName);
     var rowStyle = mine ? 'background:#2D1B69;border-radius:4px;padding:1px 4px;' : '';
     var name = mine ? r.name+' <span style="opacity:.8">(you)</span>' : (r.name||'anon');
     return '<div class="lb-row'+(mine?' mine':'')+'" style="'+rowStyle+'display:flex;justify-content:space-between;gap:8px;"><span>'+String(i+1).padStart(2,'0')+'. '+name+'</span><b>'+r.score+'</b></div>';
@@ -626,7 +630,7 @@ function renderGoLeaderboard(rows, myName){
     html += '<div style="opacity:.6;font-size:13px;">No scores yet</div>';
   } else {
     rows.slice(0,20).forEach(function(r, i){
-      var mine = myName && r.name === myName;
+      var mine = myName && isMe(r, myName);
       var cls = mine ? ' mine' : '';
       var nameStr = mine ? r.name+' (you)' : (r.name||'anon');
       html += '<div class="go-lb-row'+cls+'"><span>'+String(i+1).padStart(2,'0')+'. '+nameStr+'</span><b>'+r.score+'</b></div>';
@@ -679,7 +683,7 @@ class GameScene extends Phaser.Scene {
         // Find this player's best from the DB
         var name = playerName || '';
         for (var i = 0; i < res.rows.length; i++) {
-          if (res.rows[i].name === name) {
+          if (isMe(res.rows[i], name)) {
             self.best = res.rows[i].score;
             self.bestText.setText('Your Best: ' + self.best);
             localStorage.setItem('ats-best', String(self.best));
@@ -888,7 +892,7 @@ class GameScene extends Phaser.Scene {
         // Best score = this player's entry in the deduplicated leaderboard (DB truth)
         var dbBest = 0, bestRank = -1;
         for (var i = 0; i < rows.length; i++) {
-          if (rows[i].name === name) {
+          if (isMe(rows[i], name)) {
             dbBest = rows[i].score;
             bestRank = i;
             break;
@@ -935,7 +939,7 @@ class GameScene extends Phaser.Scene {
         var rows = (res.ok ? res.rows : []);
         var dbBest = 0;
         for (var i = 0; i < rows.length; i++) {
-          if (rows[i].name === name) { dbBest = rows[i].score; break; }
+          if (isMe(rows[i], name)) { dbBest = rows[i].score; break; }
         }
 
         // Only submit if this score beats the DB record
@@ -986,7 +990,7 @@ class GameScene extends Phaser.Scene {
       if (myName && rows.length > 0) {
         var myRow = -1;
         for (var i = 0; i < rows.length; i++) {
-          if (rows[i].name === myName) { myRow = i; break; }
+          if (isMe(rows[i], myName)) { myRow = i; break; }
         }
         if (myRow >= 0 && goRank) goRank.textContent = '#' + (myRow + 1);
       }
@@ -1001,7 +1005,7 @@ class GameScene extends Phaser.Scene {
         self.topText.setText('#1: ' + (top.name||'anon') + ' — ' + top.score);
         var name = playerName || '';
         for (var i = 0; i < res.rows.length; i++) {
-          if (res.rows[i].name === name) {
+          if (isMe(res.rows[i], name)) {
             self.best = res.rows[i].score;
             self.bestText.setText('Your Best: ' + self.best);
             break;
