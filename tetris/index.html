@@ -487,13 +487,19 @@ var ATS_SUBMIT = window.ATS_FN_BASE ? window.ATS_FN_BASE + '/ats-submit' : "";
 
 async function startSession() {
   if (ATS_START) {
-    try {
-      var res = await fetch(ATS_START, { method: 'POST', headers: { 'content-type': 'application/json' } });
-      if (res.ok) {
-        var d = await res.json();
-        if (d && typeof d.seed === 'number' && d.sessionId) return { sessionId: d.sessionId, seed: d.seed >>> 0, online: true };
-      }
-    } catch (_) {}
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise(function(r){ setTimeout(r, 1000 * attempt); });
+      var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 6000) : null;
+      try {
+        var res = await fetch(ATS_START, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl ? ctl.signal : undefined });
+        if (res.ok) {
+          var d = await res.json();
+          if (d && typeof d.seed === 'number' && d.sessionId) return { sessionId: d.sessionId, seed: d.seed >>> 0, online: true };
+        }
+      } catch (_) {
+      } finally { if (timer) clearTimeout(timer); }
+    }
   }
   var seed = (Math.floor((typeof crypto !== 'undefined' && crypto.getRandomValues
     ? crypto.getRandomValues(new Uint32Array(1))[0] : (performance.now() * 1e6))) >>> 0);
@@ -674,6 +680,7 @@ class GameScene extends Phaser.Scene {
     this.scoreText = this.add.text(MARGIN+8, MARGIN+FS(28), 'Score: 0', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(16), color:'#f0e6ff'}).setDepth(3);
     this.bestText  = this.add.text(MARGIN+8, MARGIN+FS(50), 'Your Best: …', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#a88fd4'}).setDepth(3);
     this.topText   = this.add.text(MARGIN+8, MARGIN+FS(70), '#1: …', {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#00f5ff'}).setDepth(3);
+    this.offlineText = this.add.text(MARGIN+8, MARGIN+FS(70), "OFFLINE — this game won't be saved", {fontFamily:'Rajdhani, sans-serif', fontSize:FS(14), color:'#ff6b6b'}).setDepth(3).setVisible(false);
     // Fetch user's DB best and leaderboard #1 from the server
     var self = this;
     fetchTopOnline(20, 'all').then(function(res){
@@ -719,7 +726,13 @@ class GameScene extends Phaser.Scene {
   async beginSession(){
     if (this.starting) return; this.starting = true;
     var s = await startSession();
+    // Never let a player sit through a whole game that can't be submitted without knowing.
+    while (!s.online && ATS_START) {
+      if (!window.confirm("Can't reach the score server right now, so this game would NOT be counted.\n\nOK = try again\nCancel = play anyway (score won't be saved)")) break;
+      s = await startSession();
+    }
     this.sessionId = s.sessionId; this.seed = s.seed; this.online = s.online;
+    this.topText.setVisible(this.online); this.offlineText.setVisible(!this.online);
     this.engine = new AtsEngine(this.seed);
     this.inputLog = [];
     this.dropTimer = 0; this.softTimer = 0;
