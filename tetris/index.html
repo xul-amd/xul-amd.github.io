@@ -485,14 +485,56 @@ if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) {
 var ATS_START  = window.ATS_FN_BASE ? window.ATS_FN_BASE + '/ats-start'  : "";
 var ATS_SUBMIT = window.ATS_FN_BASE ? window.ATS_FN_BASE + '/ats-submit' : "";
 
+// ---- Cloudflare Turnstile (human check). Active only when a site key is configured. ----
+var TS_SITEKEY = window.TURNSTILE_SITEKEY || "";
+var tsWidget = null, tsWaiters = [];
+if (TS_SITEKEY) {
+  var tsBox = document.createElement('div');
+  tsBox.id = 'ts-box';
+  tsBox.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;';
+  document.body.appendChild(tsBox);
+  var tsScript = document.createElement('script');
+  tsScript.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  tsScript.async = true;
+  document.head.appendChild(tsScript);
+}
+function tsSettle(token){ var w = tsWaiters; tsWaiters = []; w.forEach(function(f){ f(token || null); }); }
+// Resolves to a fresh single-use token, or null if the check can't finish in time.
+function turnstileToken(){
+  if (!TS_SITEKEY) return Promise.resolve(null);
+  return new Promise(function(resolve){
+    var done = false;
+    function finish(t){ if (!done) { done = true; resolve(t); } }
+    tsWaiters.push(finish);
+    setTimeout(function(){ finish(null); }, 8000);
+    (function go(){
+      if (done) return;
+      if (!window.turnstile) { setTimeout(go, 200); return; }
+      if (tsWidget === null) {
+        tsWidget = window.turnstile.render('#ts-box', {
+          sitekey: TS_SITEKEY, execution: 'execute', appearance: 'interaction-only',
+          callback: tsSettle,
+          'error-callback': function(){ tsSettle(null); },
+          'expired-callback': function(){ tsSettle(null); }
+        });
+      } else {
+        window.turnstile.reset(tsWidget);
+      }
+      window.turnstile.execute(tsWidget);
+    })();
+  });
+}
+
 async function startSession() {
   if (ATS_START) {
     for (var attempt = 0; attempt < 3; attempt++) {
       if (attempt) await new Promise(function(r){ setTimeout(r, 1000 * attempt); });
+      var tsToken = await turnstileToken();
       var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 6000) : null;
       try {
-        var res = await fetch(ATS_START, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl ? ctl.signal : undefined });
+        var res = await fetch(ATS_START, { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(tsToken ? { turnstile: tsToken } : {}), signal: ctl ? ctl.signal : undefined });
         if (res.ok) {
           var d = await res.json();
           if (d && typeof d.seed === 'number' && d.sessionId) return { sessionId: d.sessionId, seed: d.seed >>> 0, online: true };
@@ -731,6 +773,7 @@ class GameScene extends Phaser.Scene {
     this.softTimer = 0;
     this.nextStepAt = performance.now() + this.engine.getDropInterval();
     this.gameStartTime = Date.now();
+    this.startPerf = performance.now();
     this.bestAtStart = Number(localStorage.getItem('ats-best')||0);
     this.started = true; this.gameOver = false; this.starting = false;
     this.syncAll();
@@ -754,7 +797,8 @@ class GameScene extends Phaser.Scene {
     if (!this.engine || this.gameOver) return;
     var before = this.engine.tick;
     var changed = this.engine.input(action);
-    if (changed) { this.inputLog.push({ t: before, a: action }); this.afterStateChange(); }
+    // ms = exact time of the key press since game start, kept for timing review (not scoring)
+    if (changed) { this.inputLog.push({ t: before, a: action, ms: Math.round(performance.now() - this.startPerf) }); this.afterStateChange(); }
   }
 
   afterStateChange(){

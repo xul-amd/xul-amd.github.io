@@ -5,3 +5,6 @@ window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // Edge-function base URL. Default derives from the project ref; override if you
 // use a custom domain. All score writes go through these server-side functions.
 window.ATS_FN_BASE = "https://pmgfmymtavhjfynoyupv.functions.supabase.co";
+
+// Cloudflare Turnstile site key (public). Empty = human check off.
+window.TURNSTILE_SITEKEY = "0x4AAAAAAFgEIKxVK2TMyib0";
