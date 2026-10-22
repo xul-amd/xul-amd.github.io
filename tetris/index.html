@@ -376,6 +376,29 @@
     .ts-slot:empty { display:none; }
     .ts-hint { font-size:14px; color:var(--gold); }
     #ts-float { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:10000; margin:0; }
+    #gameover-overlay .panel { max-height: calc(100% - 16px); overflow-y: auto; }
+    /* ---- submit puzzle: tap A, T, S ---- */
+    .pz-head { font-family: var(--pixel); font-size: 10px; letter-spacing: 3px; color: var(--cyan); text-shadow: 0 0 6px var(--cyan); margin: 2px 0 8px; }
+    .pz-note { font-size: 13px; color: #ff6b6b; margin-bottom: 6px; }
+    .pz-ask { font-size: 15px; margin-bottom: 10px; }
+    .pz-ask b { font-family: var(--pixel); font-size: 11px; color: #1a0d3d; padding: 3px 6px; border-radius: 4px; margin: 0 2px; }
+    .pz-ask .pa { background: #4fc3f7; box-shadow: 0 0 8px #4fc3f7; }
+    .pz-ask .pt { background: #ff8a00; box-shadow: 0 0 8px #ff8a00; }
+    .pz-ask .ps { background: #69f0ae; box-shadow: 0 0 8px #69f0ae; }
+    .pz-board { position: relative; width: 100%; max-width: 288px; aspect-ratio: 1; margin: 0 auto; cursor: pointer;
+      border: 2px solid var(--neon); border-radius: 8px; overflow: hidden; box-shadow: 0 0 14px rgba(224,64,251,.55); }
+    .pz-board img { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+    .pz-mark { position: absolute; width: 42px; height: 42px; transform: translate(-50%,-50%); border-radius: 50%;
+      border: 3px solid; display: grid; place-items: center; font-family: var(--pixel); font-size: 12px;
+      background: rgba(20,10,48,.45); pointer-events: none; animation: pzpop .18s ease-out; }
+    .pz-m0 { border-color: #4fc3f7; color: #4fc3f7; box-shadow: 0 0 12px #4fc3f7; }
+    .pz-m1 { border-color: #ff8a00; color: #ff8a00; box-shadow: 0 0 12px #ff8a00; }
+    .pz-m2 { border-color: #69f0ae; color: #69f0ae; box-shadow: 0 0 12px #69f0ae; }
+    @keyframes pzpop { from { transform: translate(-50%,-50%) scale(.3); opacity: 0; } }
+    .pz-actions { display: flex; justify-content: center; gap: 10px; margin: 10px 0 8px; }
+    .pz-btn { font-family: var(--pixel); font-size: 8px; letter-spacing: 1px; color: var(--neon2); background: transparent;
+      border: 1px solid var(--neon); border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+    .pz-btn:hover { box-shadow: var(--glow-neon); color: #fff; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -470,6 +493,7 @@
         <div id="go-progress-text" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
       </div>
       <div class="ts-slot" id="ts-over"></div>
+      <div id="pz-over"></div>
       <div class="go-status" id="go-status"></div>
       <div class="go-lb" id="go-lb"></div>
       <button class="go-play-btn" id="go-play-btn">PLAY AGAIN</button>
@@ -567,13 +591,79 @@ async function startSession() {
   return { sessionId: null, seed: seed, online: false };
 }
 
-async function submitRun(sessionId, seed, name, inputs, tsToken) {
+// ---- Submit puzzle (tap A, T, S). The server draws it and keeps the answer. ----
+var ATS_PUZZLE = window.ATS_FN_BASE ? window.ATS_FN_BASE + '/ats-puzzle' : "";
+async function fetchPuzzle(sessionId, seed){
+  if (!ATS_PUZZLE || !sessionId) return null;
+  try {
+    var res = await fetch(ATS_PUZZLE, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionId, seed: seed }) });
+    var d = await res.json().catch(function(){ return {}; });
+    if (res.ok && d.svg) return d;
+    if (d.error === 'puzzle_limit') return { error: 'puzzle_limit' };
+  } catch (_) {}
+  return null;   // no puzzle available: submit without one and let the server decide
+}
+// Shows a puzzle in the game-over panel; resolves to the three tapped tiles, or null/{error}.
+async function solvePuzzle(sessionId, seed, notice){
+  var pz = await fetchPuzzle(sessionId, seed);
+  if (!pz || pz.error) return pz;
+  var slot = document.getElementById('pz-over');
+  return new Promise(function(resolve){
+    goLb.style.display = 'none';
+    document.getElementById('go-progress-text').textContent = 'Last step: solve the puzzle';
+    slot.innerHTML = '<div class="pz-head">LAST STEP</div>' +
+      (notice ? '<div class="pz-note">' + notice + '</div>' : '') +
+      '<div class="pz-ask">Tap <b class="pa">A</b> &rarr; <b class="pt">T</b> &rarr; <b class="ps">S</b></div>' +
+      '<div class="pz-board"><img alt="Puzzle: tap the letters A, then T, then S"></div>' +
+      '<div class="pz-actions"><button type="button" class="pz-btn" data-act="clear">CLEAR</button>' +
+      '<button type="button" class="pz-btn" data-act="new">NEW PUZZLE</button></div>';
+    var board = slot.querySelector('.pz-board'), img = board.querySelector('img'), picks = [];
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pz.svg);
+    function finish(v){ slot.innerHTML = ''; goLb.style.display = ''; resolve(v); }
+    function draw(){
+      board.querySelectorAll('.pz-mark').forEach(function(m){ m.remove(); });
+      picks.forEach(function(t, i){
+        var m = document.createElement('span');
+        m.className = 'pz-mark pz-m' + i; m.textContent = 'ATS'[i];
+        m.style.left = ((t % 4) + 0.5) * 25 + '%'; m.style.top = (Math.floor(t / 4) + 0.5) * 25 + '%';
+        board.appendChild(m);
+      });
+    }
+    board.addEventListener('click', function(e){
+      var r = img.getBoundingClientRect();
+      var col = Math.floor((e.clientX - r.left) / r.width * 4), row = Math.floor((e.clientY - r.top) / r.height * 4);
+      if (col < 0 || col > 3 || row < 0 || row > 3) return;
+      var t = row * 4 + col;
+      if (picks.indexOf(t) >= 0 || picks.length >= 3) return;
+      picks.push(t); draw();
+      if (picks.length === 3) setTimeout(function(){ finish(picks.slice()); }, 300);
+    });
+    slot.querySelector('[data-act=clear]').onclick = function(){ picks = []; draw(); };
+    slot.querySelector('[data-act=new]').onclick = function(){ slot.innerHTML = ''; solvePuzzle(sessionId, seed, '').then(resolve); };
+  });
+}
+// Puzzle + submit loop: a wrong answer gets a fresh puzzle (the Turnstile token is reused,
+// since the server checks the puzzle first and only then spends the token).
+async function submitWithPuzzle(sessionId, seed, name, inputs, tsToken){
+  var notice = '';
+  for (;;) {
+    var answer = await solvePuzzle(sessionId, seed, notice);
+    if (answer && answer.error) return { ok: false, reason: 'too many puzzle attempts' };
+    document.getElementById('go-progress-text').textContent = 'New best! Submitting…';
+    var r = await submitRun(sessionId, seed, name, inputs, tsToken, answer);
+    if (r.ok || r.reason !== 'puzzle_failed') return r;
+    notice = 'Not quite — try this new one';
+  }
+}
+
+async function submitRun(sessionId, seed, name, inputs, tsToken, puzzle) {
   if (!ATS_SUBMIT || !sessionId) return { ok: false, reason: 'offline' };
   try {
     var res = await fetch(ATS_SUBMIT, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, seed: seed, name: name, inputs: inputs, turnstile: tsToken || undefined })
+      body: JSON.stringify({ sessionId: sessionId, seed: seed, name: name, inputs: inputs, turnstile: tsToken || undefined, puzzle: puzzle || undefined })
     });
     var d = await res.json().catch(function(){ return {}; });
     if (!res.ok) return { ok: false, reason: d.error || ('HTTP ' + res.status) };
@@ -954,6 +1044,7 @@ class GameScene extends Phaser.Scene {
     goBestRank.textContent = '…';
     goStatus.textContent = '';
     goStatus.onclick = null; goStatus.style.cursor = '';
+    document.getElementById('pz-over').innerHTML = ''; goLb.style.display = '';
     goStatus.style.color = '';
     goLb.innerHTML = '';
     goProgress.style.display = 'none';
@@ -1034,9 +1125,9 @@ class GameScene extends Phaser.Scene {
             goStatus.onclick = function(){ goStatus.onclick = null; goStatus.style.cursor = ''; goStatus.textContent = ''; doSubmit(); };
             return;
           }
-          goProgressText.textContent = 'New best! Submitting…';
+          goProgressText.textContent = 'Last step: solve the puzzle';
           goProgressBar.style.width = '50%';
-          submitRun(sessionId, seed, name, inputLog, tsTok).then(function(r){
+          submitWithPuzzle(sessionId, seed, name, inputLog, tsTok).then(function(r){
             goProgressBar.style.width = '80%';
             goProgressText.textContent = 'Refreshing leaderboard…';
             var submitOk = !!(r && r.ok);
