@@ -372,6 +372,10 @@
         font-size: 9px;
       }
     }
+    .ts-slot { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:12px; }
+    .ts-slot:empty { display:none; }
+    .ts-hint { font-size:14px; color:var(--gold); }
+    #ts-float { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:10000; margin:0; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -381,6 +385,7 @@
 <body>
 
   <!-- Pre-game -->
+  <div class="ts-slot" id="ts-float"></div>
   <div id="pregame">
     <span class="hdr">ATS-Semble</span>
     <div class="row">Goal: Make
@@ -410,6 +415,7 @@
       <input type="text" id="name-input" placeholder="Enter your full name" />
       <button class="start-btn" id="start-btn">START</button>
     </div>
+    <div class="ts-slot" id="ts-start"></div>
     <div class="row" style="margin-top:12px;font-size:15px;color:var(--muted);">Enter your <span class="ntid-chip">FULL NAME</span> before starting — your best score is submitted automatically!</div>
   </div>
 
@@ -463,6 +469,7 @@
         </div>
         <div id="go-progress-text" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
       </div>
+      <div class="ts-slot" id="ts-over"></div>
       <div class="go-status" id="go-status"></div>
       <div class="go-lb" id="go-lb"></div>
       <button class="go-play-btn" id="go-play-btn">PLAY AGAIN</button>
@@ -487,49 +494,61 @@ var ATS_SUBMIT = window.ATS_FN_BASE ? window.ATS_FN_BASE + '/ats-submit' : "";
 
 // ---- Cloudflare Turnstile (human check). Active only when a site key is configured. ----
 var TS_SITEKEY = window.TURNSTILE_SITEKEY || "";
-var tsWidget = null, tsWaiters = [];
 if (TS_SITEKEY) {
-  var tsBox = document.createElement('div');
-  tsBox.id = 'ts-box';
-  tsBox.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;';
-  document.body.appendChild(tsBox);
   var tsScript = document.createElement('script');
   tsScript.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
   tsScript.async = true;
   document.head.appendChild(tsScript);
 }
-function tsSettle(token){ var w = tsWaiters; tsWaiters = []; w.forEach(function(f){ f(token || null); }); }
-// Resolves to a fresh single-use token, or null if the check can't finish in time.
-function turnstileToken(){
+var tsPrefetch = null;   // token earned on the start screen, used by the first session request
+// Shows the check inside the given slot and resolves to a fresh single-use token, or null.
+// Most players pass invisibly; if Cloudflare wants a click, we wait up to 3 minutes for it.
+function turnstileToken(slotId){
   if (!TS_SITEKEY) return Promise.resolve(null);
   return new Promise(function(resolve){
-    var done = false;
-    function finish(t){ if (!done) { done = true; resolve(t); } }
-    tsWaiters.push(finish);
-    setTimeout(function(){ finish(null); }, 8000);
+    var slot = document.getElementById(slotId) || document.getElementById('ts-float');
+    var wrap = document.createElement('div'), holder = document.createElement('div');
+    wrap.appendChild(holder); slot.appendChild(wrap);
+    var done = false, timer = null, widget = null;
+    function finish(t){
+      if (done) return; done = true; clearTimeout(timer);
+      if (widget !== null && window.turnstile) { try { window.turnstile.remove(widget); } catch (_) {} }
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      resolve(t || null);
+    }
+    function arm(ms){ clearTimeout(timer); timer = setTimeout(function(){ finish(null); }, ms); }
+    arm(12000);
     (function go(){
       if (done) return;
       if (!window.turnstile) { setTimeout(go, 200); return; }
-      if (tsWidget === null) {
-        tsWidget = window.turnstile.render('#ts-box', {
-          sitekey: TS_SITEKEY, execution: 'execute', appearance: 'interaction-only',
-          callback: tsSettle,
-          'error-callback': function(){ tsSettle(null); },
-          'expired-callback': function(){ tsSettle(null); }
-        });
-      } else {
-        window.turnstile.reset(tsWidget);
-      }
-      window.turnstile.execute(tsWidget);
+      widget = window.turnstile.render(holder, {
+        sitekey: TS_SITEKEY, appearance: 'interaction-only', theme: 'dark',
+        callback: function(t){ finish(t); },
+        'error-callback': function(){ finish(null); return true; },
+        'expired-callback': function(){ finish(null); },
+        'timeout-callback': function(){ finish(null); },
+        'before-interactive-callback': function(){
+          arm(180000);
+          var h = document.createElement('div'); h.className = 'ts-hint';
+          h.textContent = 'Please tick the box to continue';
+          wrap.insertBefore(h, holder);
+        }
+      });
     })();
   });
+}
+function tsSlotNow(){
+  if (!pregameEl.classList.contains('hidden')) return 'ts-start';
+  if (goOverlay.classList.contains('active')) return 'ts-over';
+  return 'ts-float';
 }
 
 async function startSession() {
   if (ATS_START) {
     for (var attempt = 0; attempt < 3; attempt++) {
       if (attempt) await new Promise(function(r){ setTimeout(r, 1000 * attempt); });
-      var tsToken = await turnstileToken();
+      var tsToken = (attempt === 0 && tsPrefetch) ? tsPrefetch : await turnstileToken(tsSlotNow());
+      tsPrefetch = null;
       var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 6000) : null;
       try {
@@ -548,13 +567,13 @@ async function startSession() {
   return { sessionId: null, seed: seed, online: false };
 }
 
-async function submitRun(sessionId, seed, name, inputs) {
+async function submitRun(sessionId, seed, name, inputs, tsToken) {
   if (!ATS_SUBMIT || !sessionId) return { ok: false, reason: 'offline' };
   try {
     var res = await fetch(ATS_SUBMIT, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, seed: seed, name: name, inputs: inputs })
+      body: JSON.stringify({ sessionId: sessionId, seed: seed, name: name, inputs: inputs, turnstile: tsToken || undefined })
     });
     var d = await res.json().catch(function(){ return {}; });
     if (!res.ok) return { ok: false, reason: d.error || ('HTTP ' + res.status) };
@@ -934,6 +953,7 @@ class GameScene extends Phaser.Scene {
     if (goRank) goRank.textContent = '…';
     goBestRank.textContent = '…';
     goStatus.textContent = '';
+    goStatus.onclick = null; goStatus.style.cursor = '';
     goStatus.style.color = '';
     goLb.innerHTML = '';
     goProgress.style.display = 'none';
@@ -1003,9 +1023,20 @@ class GameScene extends Phaser.Scene {
 
         // Only submit if this score beats the DB record
         if (finalScore > dbBest) {
+          var doSubmit = async function(){
+          goProgress.style.display = 'block';
+          goProgressText.textContent = 'Checking you are human…';
+          var tsTok = await turnstileToken('ts-over');
+          if (TS_SITEKEY && !tsTok) {
+            goProgress.style.display = 'none';
+            goStatus.textContent = 'Human check not completed — tap here to retry and submit';
+            goStatus.style.color = '#ff6b6b'; goStatus.style.cursor = 'pointer';
+            goStatus.onclick = function(){ goStatus.onclick = null; goStatus.style.cursor = ''; goStatus.textContent = ''; doSubmit(); };
+            return;
+          }
           goProgressText.textContent = 'New best! Submitting…';
           goProgressBar.style.width = '50%';
-          submitRun(sessionId, seed, name, inputLog).then(function(r){
+          submitRun(sessionId, seed, name, inputLog, tsTok).then(function(r){
             goProgressBar.style.width = '80%';
             goProgressText.textContent = 'Refreshing leaderboard…';
             var submitOk = !!(r && r.ok);
@@ -1021,6 +1052,8 @@ class GameScene extends Phaser.Scene {
               updateFromLeaderboard((res2.ok ? res2.rows : []), submitOk);
             }).catch(function(){ updateFromLeaderboard(rows, false); goProgress.style.display = 'none'; });
           });
+          };
+          doSubmit();
         } else {
           // Score not higher — skip submission, just show stats
           goProgressBar.style.width = '100%';
@@ -1102,9 +1135,22 @@ function sizeContainer(){
 // ---- Wire up START button ----
 var phaserGame = null;
 
-startBtn.addEventListener('click', function(){
+startBtn.addEventListener('click', async function(){
   playerName = nameInput.value.trim();
   if (!playerName) { nameInput.focus(); return; }
+  if (startBtn.dataset.busy) return;
+  if (TS_SITEKEY) {
+    startBtn.dataset.busy = '1'; var label = startBtn.textContent; startBtn.textContent = 'VERIFYING…';
+    var tsOld = document.getElementById('ts-start-msg'); if (tsOld) tsOld.remove();
+    tsPrefetch = await turnstileToken('ts-start');
+    startBtn.textContent = label; delete startBtn.dataset.busy;
+    if (!tsPrefetch) {
+      var m = document.createElement('div'); m.id = 'ts-start-msg'; m.className = 'ts-hint';
+      m.textContent = "Human check didn't complete — press START to try again.";
+      document.getElementById('ts-start').appendChild(m);
+      return;
+    }
+  }
   localStorage.setItem('ats-name', playerName);
   pregameEl.classList.add('hidden');
   var gl = document.getElementById('game-layout');
