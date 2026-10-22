@@ -524,26 +524,17 @@ async function fetchTopOnline(limit, period){
   limit = limit || 20; period = period || 'all';
   if(!supa) return { ok:false, rows:[] };
   try{
-    var query = supa.from('scores').select('name,name_key,score,created_at');
-    var resp = await query.order('score',{ascending:false}).limit(limit * 3);
+    // 'leaderboard' = best visible score per player (see supabase/anti-cheat-leaderboard.sql)
+    var resp = await supa.from('leaderboard').select('name,name_key,score,created_at')
+      .order('score',{ascending:false}).limit(limit);
     if (resp.error) return { ok:false, rows:[] };
-    return { ok:true, rows: deduplicateScoresByName(resp.data||[]).slice(0, limit) };
+    return { ok:true, rows: resp.data || [] };
   } catch(e){ return { ok:false, rows:[] }; }
 }
 // Same key as scores.name_key in the DB: "Chou, Joe" and "chou joe" are one player.
 function nameKey(s){ return String(s || '').toLowerCase().replace(/[\x00-\x2F\x3A-\x40\x5B-\x60\x7B-\x7F]/g, ''); }
 function rowKey(row){ return row.name_key || nameKey(row.name) || ('raw:' + (row.name || 'anon')); }
 function isMe(row, n){ var k = nameKey(n); return !!k && rowKey(row) === k; }
-function deduplicateScoresByName(rows){
-  if(!rows || rows.length === 0) return rows;
-  var nameMap = new Map();
-  rows.forEach(function(row){
-    var key = rowKey(row);
-    var existing = nameMap.get(key);
-    if (!existing || row.score > existing.score) nameMap.set(key, row);
-  });
-  return Array.from(nameMap.values()).sort(function(a, b){ return b.score - a.score; });
-}
 async function fetchRankOnline(score){
   if(!supa || typeof score !== 'number') return null;
   try{
@@ -657,8 +648,10 @@ class GameScene extends Phaser.Scene {
     this.started = false;
     this.gameOver = false;
     this.inputLog = [];
-    this.dropTimer = 0;
     this.softTimer = 0;
+    // Keeps gravity running while the tab is hidden (frames stop, timers are throttled but still fire).
+    this.pumpTimer = setInterval(function(){ if (sceneRef) sceneRef.pump(); }, 250);
+    document.addEventListener('visibilitychange', function(){ if (sceneRef) sceneRef.pump(); });
     this.cellObjs = Array.from({length:ROWS}, function(){ return Array(COLS).fill(null); });
     this.activeObj = null;
     this.best = 0; // set from DB in create() via fetchTopOnline
@@ -735,11 +728,26 @@ class GameScene extends Phaser.Scene {
     this.topText.setVisible(this.online); this.offlineText.setVisible(!this.online);
     this.engine = new AtsEngine(this.seed);
     this.inputLog = [];
-    this.dropTimer = 0; this.softTimer = 0;
+    this.softTimer = 0;
+    this.nextStepAt = performance.now() + this.engine.getDropInterval();
     this.gameStartTime = Date.now();
     this.bestAtStart = Number(localStorage.getItem('ats-best')||0);
     this.started = true; this.gameOver = false; this.starting = false;
     this.syncAll();
+  }
+
+  // Gravity follows the wall clock, not animation frames, so the game keeps playing when the
+  // tab is hidden (browsers pause requestAnimationFrame and throttle timers there). Steps owed
+  // since the last call are applied together and drawn once. The interval sum matches the
+  // server's minimum-time check exactly (plausibility.ts adds getDropInterval() before each step).
+  pump(){
+    if (!this.started || this.gameOver || !this.engine) return;
+    var now = performance.now(), n = 0;
+    while (now >= this.nextStepAt && !this.engine.gameOver && n < 200000) {
+      this.engine.step(); n++;
+      this.nextStepAt += this.engine.getDropInterval();
+    }
+    if (n) this.afterStateChange();
   }
 
   applyInput(action){
@@ -818,14 +826,8 @@ class GameScene extends Phaser.Scene {
 
   update(_, dt){
     if (!this.started || this.gameOver || !this.engine) return;
-    this.dropTimer += dt;
-    var interval = this.engine.getDropInterval();
-    if (this.dropTimer >= interval) {
-      this.dropTimer = 0;
-      this.engine.step();
-      this.afterStateChange();
-      if (this.gameOver) return;
-    }
+    this.pump();
+    if (this.gameOver) return;
     if (Phaser.Input.Keyboard.JustDown(this.cursors.left))  this.applyInput('L');
     if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) this.applyInput('R');
     if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) { this.applyInput('D'); this.softTimer = 0; }
